@@ -31,7 +31,7 @@ def healthz(request):
         return JsonResponse(body, status=503)
     try:
         threshold = SiteSettings.load().stale_after_minutes
-        snap = freshness.snapshot(checked_at)
+        snap = freshness.snapshot(checked_at, threshold)
     except DatabaseError:
         return JsonResponse(body, status=503)
     body.update(

@@ -4,23 +4,30 @@ the live My Shift notice (eng re-review D5) and the print header (eng re-review 
 Stale rule (eng review D5, threshold = SiteSettings.stale_after_minutes, default 30):
 - Outside every scheduled shift (core.shifts.window_at is None) a hub is never stale.
 - During a scheduled shift, quiet time is counted from
-  max(last_new_transaction_at, the current shift window's start). The hub is stale once quiet
-  time reaches the threshold (>=, so 29:59 is fresh and 30:00 is stale). Starting a shift with
-  no jobs yet is therefore not instantly stale (pairs with the D10 start-of-shift state).
-- A hub that has never ingested successfully is stale during any scheduled shift.
+  max(last_new_transaction_at, block start), where the block is the run of back-to-back
+  scheduled windows containing now (walk back while prev.end >= cur.start; a gap or a
+  non-working day ends the block). So a shift change does not reset the clock during an outage
+  (1st 7-15 then 2nd 15-23: last job 14:20 is stale at 15:05), but the first shift after a gap
+  starting with no jobs yet is not instantly stale (pairs with the D10 start-of-shift state).
+  The hub is stale once quiet time reaches the threshold (>=, so 29:59 is fresh, 30:00 stale).
+- A hub that has never seen a transaction follows the same rule: stale at block start + threshold.
 
-Times are aware UTC throughout; `display_time()` formats them in the display timezone
-(settings.TIME_ZONE, from TAKT_DISPLAY_TIMEZONE).
+Times are aware UTC throughout. Display strings for a hub use the hub's plant timezone;
+`display_time()` without a tz uses the display timezone (settings.TIME_ZONE).
 """
 
 from dataclasses import dataclass
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 from django.db import DatabaseError, connection
 from django.utils import timezone
 
 from core import shifts
-from core.models import Hub, SiteSettings
+from core.models import Hub, NonWorkingDay, Shift, SiteSettings
+
+# A contiguous block (e.g. a 24/7 three-shift plant) is walked back at most this far.
+MAX_BLOCK_DAYS = 7
 
 
 def current_time():
@@ -39,13 +46,16 @@ def database_reachable():
     return True
 
 
-def display_time(instant, now=None):
-    """'6:42 AM' in the display timezone; 'Oct 11, 6:42 AM' when not on the same local day as `now`."""
+def display_time(instant, now=None, tz=None):
+    """'6:42 AM' in `tz` (an IANA name or tzinfo; default: the display timezone);
+    'Oct 11, 6:42 AM' when not on the same local day as `now`."""
     if instant is None:
         return ""
-    local = timezone.localtime(instant)
+    if isinstance(tz, str):
+        tz = ZoneInfo(tz)
+    local = timezone.localtime(instant, tz)
     text = f"{local.hour % 12 or 12}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'}"
-    ref = timezone.localtime(now or current_time())
+    ref = timezone.localtime(now or current_time(), tz)
     if local.date() != ref.date():
         text = f"{local.strftime('%b')} {local.day}, {text}"
     return text
@@ -101,17 +111,20 @@ class HubFreshness:
 
     @property
     def stopped_at(self):
-        """The 'last good time' for stale text: last new transaction, else last successful ingest."""
-        return self.hub.last_new_transaction_at or self.hub.last_successful_ingest_at
+        """The 'last good time' for stale text: the last new transaction (None if there never was one)."""
+        return self.hub.last_new_transaction_at
 
-    # Display strings (display timezone).
+    # Display strings, in the hub's plant timezone.
+    def display(self, instant):
+        return display_time(instant, self.now, self.hub.plant_timezone)
+
     @property
     def data_as_of_display(self):
-        return display_time(self.data_as_of, self.now)
+        return self.display(self.data_as_of)
 
     @property
     def stopped_at_display(self):
-        return display_time(self.stopped_at, self.now)
+        return self.display(self.stopped_at)
 
     @property
     def short_name(self):
@@ -134,6 +147,31 @@ class HubFreshness:
         }
 
 
+def block_start(hub, window):
+    """Start of the contiguous run of scheduled windows that contains `window`.
+
+    Walks back while an earlier scheduled window ends at or after the block's start; a gap or a
+    non-working day ends the block. Bounded by MAX_BLOCK_DAYS.
+    """
+    non_working = set(NonWorkingDay.objects.filter(hub=hub).values_list("date", flat=True))
+    hub_shifts = list(Shift.objects.filter(hub=hub, active=True).prefetch_related("breaks").select_related("hub"))
+    earlier = [
+        shifts.window_for(s, d)
+        for back in range(0, MAX_BLOCK_DAYS + 1)
+        for d in [window.production_date - timedelta(days=back)]
+        for s in hub_shifts
+        if shifts.is_scheduled(s, d, non_working)
+    ]
+    start = window.start
+    changed = True
+    while changed:
+        changed = False
+        for w in earlier:
+            if w.start < start <= w.end:
+                start, changed = w.start, True
+    return start
+
+
 def hub_freshness(hub, now=None, threshold_minutes=None):
     """Freshness of one hub at `now` (aware; default: current_time())."""
     now = now or current_time()
@@ -143,11 +181,9 @@ def hub_freshness(hub, now=None, threshold_minutes=None):
     window = shifts.window_at(hub, now)
     if window is None:
         return HubFreshness(hub, now, threshold_minutes, None, False, None, None)
-    if hub.last_successful_ingest_at is None:
-        # Never ingested during a scheduled shift: stale from the moment the shift is running.
-        return HubFreshness(hub, now, threshold_minutes, window, True, window.start, window.start)
+    start = block_start(hub, window)
     last_tx = hub.last_new_transaction_at
-    quiet_from = max(last_tx, window.start) if last_tx else window.start
+    quiet_from = max(last_tx, start) if last_tx else start
     stale = now - quiet_from >= threshold
     return HubFreshness(hub, now, threshold_minutes, window, stale, quiet_from + threshold if stale else None,
                         quiet_from)
@@ -177,10 +213,10 @@ class Snapshot:
         return self.by_code.get(code)
 
 
-def snapshot(now=None):
+def snapshot(now=None, threshold_minutes=None):
     """Freshness for every hub. With zero hubs configured, nothing can be stale."""
     now = now or current_time()
-    threshold = SiteSettings.load().stale_after_minutes
+    threshold = SiteSettings.load().stale_after_minutes if threshold_minutes is None else threshold_minutes
     hubs = Hub.objects.order_by("name")
     return Snapshot(now, tuple(hub_freshness(h, now, threshold) for h in hubs))
 
@@ -211,9 +247,9 @@ def print_header(hub, now=None):
     if not isinstance(hub, Hub):
         hub = Hub.objects.get(code=hub)
     f = hub_freshness(hub, now)
-    data = f"Data as of {f.data_as_of_display}" if f.data_as_of else "Data as of: no data received yet"
+    data = f"Data as of {f.data_as_of_display}" if f.data_as_of else "Data as of —, no data received yet"
     stale_text = ""
     if f.stale:
         stale_text = (f"STALE: data stopped at {f.stopped_at_display}" if f.stopped_at
                       else "STALE: no data received yet")
-    return PrintHeader(data, f"Printed {display_time(f.now, f.now)}", f.stale, stale_text)
+    return PrintHeader(data, f"Printed {f.display(f.now)}", f.stale, stale_text)

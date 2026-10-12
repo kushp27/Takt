@@ -1,6 +1,6 @@
 """ops.freshness: the 30-minute stale rule (eng review D5) and the print header (eng re-review D6)."""
 
-from datetime import time, timedelta
+from datetime import date, time, timedelta
 
 from core.models import SiteSettings
 from ops import freshness
@@ -80,11 +80,74 @@ def test_third_shift_across_midnight_counts_as_scheduled():
     assert not freshness.hub_freshness(h, f.local(h, 2026, 10, 13, 0, 49)).stale
 
 
-def test_never_ingested_hub_is_stale_during_a_shift_only():
+def test_never_ingested_hub_is_stale_only_at_block_start_plus_threshold():
     h = _first_shift_hub()
-    during = freshness.hub_freshness(h, f.local(h, 2026, 10, 12, 7, 1))
-    assert during.stale and during.stale_since == f.local(h, 2026, 10, 12, 7, 0)
+    assert not freshness.hub_freshness(h, f.local(h, 2026, 10, 12, 7, 29)).stale
+    at_30 = freshness.hub_freshness(h, f.local(h, 2026, 10, 12, 7, 30))
+    assert at_30.stale and at_30.stale_since == f.local(h, 2026, 10, 12, 7, 30)
+    assert at_30.stopped_at is None
     assert not freshness.hub_freshness(h, f.local(h, 2026, 10, 12, 20, 0)).stale
+
+
+def test_shift_change_does_not_reset_the_quiet_clock():
+    h = _hub()
+    f.shift(h, "1st", time(7), time(15))
+    f.shift(h, "2nd", time(15), time(23))
+    h.last_new_transaction_at = h.last_successful_ingest_at = f.local(h, 2026, 10, 12, 14, 20)
+    h.save()
+    r = freshness.hub_freshness(h, f.local(h, 2026, 10, 12, 15, 5))
+    assert r.window.shift.name == "2nd"
+    assert r.stale and r.stale_since == f.local(h, 2026, 10, 12, 14, 50)
+    assert r.minutes_quiet == 45
+
+
+def test_third_shift_into_first_shift_is_one_contiguous_block():
+    h = _hub()
+    f.shift(h, "3rd", time(23), time(7))
+    f.shift(h, "1st", time(7), time(15))
+    h.last_new_transaction_at = h.last_successful_ingest_at = f.local(h, 2026, 10, 13, 6, 45)
+    h.save()
+    r = freshness.hub_freshness(h, f.local(h, 2026, 10, 13, 7, 15))
+    assert r.window.shift.name == "1st" and r.stale  # 30 quiet minutes across 07:00
+    # Never-transacted hub: the block started at 23:00 the night before.
+    h.last_new_transaction_at = None
+    h.save()
+    r = freshness.hub_freshness(h, f.local(h, 2026, 10, 13, 7, 0))
+    assert r.quiet_from == f.local(h, 2026, 10, 12, 23, 0)
+
+
+def test_gap_between_shifts_restarts_the_count():
+    h = _hub()
+    f.shift(h, "1st", time(7), time(15))
+    f.shift(h, "2nd", time(15, 30), time(23))
+    h.last_new_transaction_at = h.last_successful_ingest_at = f.local(h, 2026, 10, 12, 14, 0)
+    h.save()
+    assert freshness.hub_freshness(h, f.local(h, 2026, 10, 12, 14, 59)).stale
+    fresh = freshness.hub_freshness(h, f.local(h, 2026, 10, 12, 15, 59))
+    assert not fresh.stale and fresh.quiet_from == f.local(h, 2026, 10, 12, 15, 30)
+    assert freshness.hub_freshness(h, f.local(h, 2026, 10, 12, 16, 0)).stale
+
+
+def test_non_working_day_breaks_the_block():
+    from core.models import NonWorkingDay
+
+    h = _hub()
+    f.shift(h, "3rd", time(23), time(7))
+    f.shift(h, "1st", time(7), time(15))
+    NonWorkingDay.objects.create(hub=h, date=date(2026, 10, 12))  # no 3rd shift starting the 12th
+    h.last_new_transaction_at = h.last_successful_ingest_at = f.local(h, 2026, 10, 12, 14, 0)
+    h.save()
+    r = freshness.hub_freshness(h, f.local(h, 2026, 10, 13, 7, 10))
+    assert r.quiet_from == f.local(h, 2026, 10, 13, 7, 0) and not r.stale
+
+
+def test_display_strings_use_the_hubs_plant_timezone():
+    h = _hub(plant_timezone="America/New_York")
+    f.shift(h, "1st", time(7), time(15))
+    h.last_successful_ingest_at = f.local(h, 2026, 10, 12, 9, 0)
+    h.save()
+    r = freshness.hub_freshness(h, f.local(h, 2026, 10, 12, 9, 5))
+    assert r.data_as_of_display == "9:00 AM"  # not 8:00 AM Chicago
 
 
 def test_threshold_comes_from_site_settings():
@@ -148,4 +211,4 @@ def test_print_header_never_ingested():
     h = _first_shift_hub()
     ph = freshness.print_header(h, f.local(h, 2026, 10, 12, 9, 0))
     assert ph.stale_text == "STALE: no data received yet"
-    assert ph.data_as_of == "Data as of: no data received yet"
+    assert ph.data_as_of == "Data as of —, no data received yet"
