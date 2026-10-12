@@ -1,0 +1,23 @@
+<!doctype html>
+{% comment %}Design D13. Rendered with no request context and no database access: no static tag, no context processors, inline styles only.{% endcomment %}
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Database unreachable · Takt</title>
+  <style>
+    body { margin: 0; padding: 32px 24px; font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 16px; line-height: 1.45; color: #1F2328; background: #FFFFFF; }
+    main { max-width: 640px; }
+    h1 { font-size: 22px; font-weight: 600; margin: 0 0 16px; }
+    a { color: #0F6E6E; }
+  </style>
+</head>
+<body>
+  <main id="main">
+    <h1>Takt can't reach its database</h1>
+    <p>Takt can't reach its database. Data is safe; try again in a few minutes. IT has been alerted via /healthz.</p>
+    <p><a href="">Try again</a></p>
+  </main>
+</body>
+</html>
