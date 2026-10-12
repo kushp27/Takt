@@ -90,8 +90,23 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# Pilot: Django local accounts for named pilot users only. SSO/LDAP via
-# django-auth-ldap replaces these before rollout (Open Question 6); not wired yet.
+# --------------------------------------------------------------------------
+# Authentication (design Component 7)
+# Pilot: Django local accounts for named pilot users only
+# (`manage.py seed_demo_users` creates dev/demo accounts; never use it in production).
+#
+# SSO/LDAP STUB -- NOT INSTALLED, NOT ACTIVE.
+# Before rollout beyond the pilot, django-auth-ldap (matching IT's other plant
+# tools) replaces local accounts. Blocked on Open Question 6: which SSO or LDAP do
+# IT's plant tools use? When answered:
+#   1. add django-auth-ldap to requirements.txt;
+#   2. AUTHENTICATION_BACKENDS = ["django_auth_ldap.backend.LDAPBackend"]
+#      (keep ModelBackend only for the break-glass builder account);
+#   3. AUTH_LDAP_SERVER_URI, AUTH_LDAP_BIND_DN, AUTH_LDAP_BIND_PASSWORD from env;
+#   4. map LDAP groups to accounts.Profile.role and Profile.areas/shift
+#      (a populate_user signal handler in accounts/), and is_superuser only for the builder.
+# Until then Django's default ModelBackend is used.
+# --------------------------------------------------------------------------
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "login"
