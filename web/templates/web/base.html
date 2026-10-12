@@ -1,0 +1,30 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Takt{% endblock %} · Takt</title>
+  <link rel="icon" href="{% static 'img/tuktuk.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+  {% block extra_head %}{% endblock %}
+  <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <header class="site-header">
+    <a class="brand" href="/"><img src="{% static 'img/tuktuk.svg' %}" alt="" width="28" height="22">Takt</a>
+    {% if user.is_authenticated %}
+    <nav aria-label="Main">
+      <ul>{% block nav %}{% endblock %}</ul>
+    </nav>
+    <div class="freshness">{% block freshness %}{% endblock %}</div>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form>
+    {% endif %}
+  </header>
+  {% block banner %}{% endblock %}
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+  <div id="live-region" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,232 @@
+{
+  "version": 2,
+  "round": 1,
+  "document": "/Users/kpatel/.gstack/projects/kpatel/kpatel-none-design-20261012-122926.md",
+  "quality_score": 6,
+  "dimensions": {
+    "completeness": "ISSUES",
+    "consistency": "ISSUES",
+    "clarity": "ISSUES",
+    "scope": "ISSUES",
+    "feasibility": "ISSUES"
+  },
+  "findings": [
+    {
+      "id": "R1-1",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Premise 5 defines takt as 'customer demand divided by planned available time'. That is a demand rate (units per time), the inverse of takt time (planned available time divided by customer demand). Every pace-vs-takt and staffing number inherits this definition.",
+      "remedy": "Correct the definition to planned available time divided by customer demand (time per unit), and state the units used by the pace-vs-takt metric."
+    },
+    {
+      "id": "R1-2",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Demand is configured per part family and takt is per line, but stations run a part mix. The design does not say how a station-level or part-level takt target is derived on a mixed-model line, so 'pace vs takt' at station and operator level is undefined.",
+      "remedy": "Specify how takt (or a per-part target) is computed for a station running multiple part families, e.g. per-part takt from that part's demand share, or a mix-weighted takt, and which one the My Shift and Line Health views use."
+    },
+    {
+      "id": "R1-3",
+      "dimension": "feasibility",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Batch stations (the kiln) are acknowledged as batch processes and configured as 'flow or batch', but the design never says how pace, units per hour, durations, or trust grade are computed for batch stations. The Assignment's audit also omits the batch-station check that Component 4 lists.",
+      "remedy": "Define the metric treatment for batch stations (e.g. per-batch cycle time, excluded from operator pace, or counts-only by default) and include batch identification in the Assignment audit."
+    },
+    {
+      "id": "R1-4",
+      "dimension": "feasibility",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Premise 4 promises operator comparisons shown with starved/blocked time, downtime, part mix, and tenure as context. The shared schema has only Job, ScrapEvent, Operator, Station, Part, Area/Line, and TaktConfig; there is no downtime or starved/blocked source, and equipment data is deferred to v2. The promised context cannot be computed from the stated data.",
+      "remedy": "Either name the data source and schema for downtime and starved/blocked time in v1, or narrow premise 4's committed context to what transactions can support (e.g. part mix, idle gaps) and state that the remaining context arrives with v2 equipment data."
+    },
+    {
+      "id": "R1-5",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Tenure is a required comparison context (premise 4), but no tenure field or source (HR system, manual admin entry) exists in the Operator model or Dependencies.",
+      "remedy": "Add the tenure field and its source to the schema and Dependencies, or drop tenure from v1 context."
+    },
+    {
+      "id": "R1-6",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Premise 1 asserts 'Job counts are trusted' as a given, yet the reconciliation against sticky notes (Assignment step 2, Audit success criterion) is the only test of counts, and the document has no branch for what happens if counts fail to reconcile within 5%. Tech transactions are also stated to be unreliable.",
+      "remedy": "Make count trust conditional on the reconciliation result and state the decision if it fails (e.g. which stations are excluded, or whether the build pauses), mirroring the amber/red outcome stated for durations."
+    },
+    {
+      "id": "R1-7",
+      "dimension": "clarity",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "The trust-grade checks list raw measures (share of durations under 10% / over 300% of median, end-of-shift clustering, shared timestamps, overlaps) but never state the cutoffs that turn those shares into green, amber, or red. Both the Assignment and the nightly job are told to 'grade' without a rule, and the UI hides metrics based on the grade.",
+      "remedy": "State initial grading cutoffs (e.g. green if each share is below X%, red if any exceeds Y%) and who tunes them, so the audit and the nightly job produce the same grade."
+    },
+    {
+      "id": "R1-8",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Premise 6 and the Assignment grade per station, while Component 4 grades 'per station and part'. Premise 6 says amber shows counts only and red excludes the station from operator metrics; Component 4 says the UI hides rate metrics wherever the grade isn't green, without a distinct red behavior. The granularity and the amber/red display rules disagree.",
+      "remedy": "Choose one grading granularity (station, or station-and-part) and one display rule set per grade, and use it consistently in the premises, Component 4, and the Assignment."
+    },
+    {
+      "id": "R1-9",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Line Health shows a per-line pace and bottleneck, but the design does not say how a line-level metric is computed when some of its stations are amber or red (hidden at station level). Rolling up untrusted durations would contradict the trust-grade rule; omitting them silently would misstate line pace.",
+      "remedy": "Specify the roll-up rule for lines containing non-green stations (e.g. exclude and show coverage, or suppress line pace below a coverage threshold) and how the bottleneck is chosen in that case."
+    },
+    {
+      "id": "R1-10",
+      "dimension": "feasibility",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Ingest is incremental by a timestamp high-water mark. Jobs that are batch-closed at shift end, left open over breaks, or corrected after the fact (all named as known behaviors) will be missed or captured in an incomplete state, because their relevant timestamp may precede the mark or change later.",
+      "remedy": "Define the ingest key (e.g. a last-modified column or transaction ID if the MES has one), a look-back window that re-reads recent rows, and how open (not yet completed) jobs are stored and later updated."
+    },
+    {
+      "id": "R1-11",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Yield by scrap code and a 14-day trend are committed v1 metrics, but ScrapEvent has only where found, code, and quantity: no timestamp, part, shift, or source hub, and the document never says which system scrap is recorded in or what the good-quantity denominator for station yield is.",
+      "remedy": "Name the scrap data source, add timestamp, part, and source fields to ScrapEvent, and define the yield formula (scrap over what count at which station)."
+    },
+    {
+      "id": "R1-12",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Unmapped operator IDs are 'flagged' by ingest, but the design does not say where the cross-hub mapping is maintained, who resolves flags, or whether jobs with unmapped IDs are counted, held, or excluded from metrics in the meantime.",
+      "remedy": "State where the mapping lives (e.g. Django admin), who owns it, and the metric behavior for jobs with unmapped operators until they are resolved."
+    },
+    {
+      "id": "R1-13",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "The per-row dispute flag is a committed v1 feature and a success criterion requires disputes resolved within 2 shifts, but the review and correction path is left as Open Question 5. Because Takt never writes to the MES, a correction cannot be applied at the source, and the design does not say whether Takt holds overrides or excludes disputed rows.",
+      "remedy": "Commit the v1 dispute behavior: who is notified, who decides, and whether a confirmed error becomes a Takt-side override/exclusion or a request to fix the MES record that the next ingest picks up."
+    },
+    {
+      "id": "R1-14",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Premise 4 says operator detail is never posted on the floor, yet My Shift includes a print-sheet button for an operator-level view. Nothing restricts what the printed sheet contains or how it is handled.",
+      "remedy": "Specify the print sheet's content (e.g. station/part totals without operator comparisons, or operator detail marked for lead use only) so it is consistent with premise 4."
+    },
+    {
+      "id": "R1-15",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Supervisors are a named target user alongside leads, but the roles list has only ops manager, lead, and admin, so supervisors' access scope to operator detail is undefined.",
+      "remedy": "Add a supervisor role with its scope, or state that supervisors use the lead or ops-manager role."
+    },
+    {
+      "id": "R1-16",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Open Question 4 asks whether HR or a union/works council must review operator metrics, but build order step 4 puts operator-level My Shift live in the pilot before that question is gated, and SSO and roles arrive only in step 6, so the pilot would expose operator detail without the access controls Component 7 requires.",
+      "remedy": "Add a gate: operator-level views do not go live until the HR/union question is answered, and role-based access is in place for the pilot (move auth earlier or restrict pilot access explicitly)."
+    },
+    {
+      "id": "R1-17",
+      "dimension": "clarity",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Line Health includes 'a generated one-line summary of how the three metrics interact', but the design does not say how it is generated (rule templates or an LLM), which would change dependencies, hosting, and data handling on an IT-owned VM.",
+      "remedy": "State the generation method; if rule-based, give the rule shape; if an LLM, name the dependency and data-handling constraints."
+    },
+    {
+      "id": "R1-18",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": null,
+      "problem": "Approach C's daily email for Brian is said to 'stay as a feature of B', but it appears in neither the Components nor the Build order, so it is unclear whether it is committed v1 scope.",
+      "remedy": "Either add the daily email to Components and the Build order (with content and mail-relay dependency) or explicitly defer it."
+    },
+    {
+      "id": "R1-19",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "'Idle hours (no transaction)' is shown per operator on My Shift, but with unreliable transactions and no starved/blocked data, gaps can reflect missing transactions or upstream starvation, which risks reading as a punitive metric.",
+      "remedy": "Define idle hours precisely (shift time minus logged job time, excluding breaks) and label it as transaction gaps rather than operator idleness until starved/blocked data exists."
+    },
+    {
+      "id": "R1-20",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The scheduler choice is left as 'Celery beat, or a management command run by cron', which affects the container set and IT runbook.",
+      "remedy": "Pick one; for a nightly job plus periodic ingest, cron-run management commands avoid adding Redis/Celery."
+    },
+    {
+      "id": "R1-21",
+      "dimension": "scope",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "A separate React front end adds a JS build toolchain for IT to own, while the views are mostly tables with drill-down that Django templates could serve; the stated goal is a standard, simple stack for IT handoff.",
+      "remedy": "Justify React, or consider Django templates (optionally with htmx) to keep one stack."
+    },
+    {
+      "id": "R1-22",
+      "dimension": "feasibility",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "Ingest queries the production MES databases directly; the design does not consider query load on systems operators transact against, or whether a read replica exists.",
+      "remedy": "Ask IT whether a replica or reporting copy is available, and bound ingest queries (indexed columns, small windows, off-peak nightly jobs)."
+    },
+    {
+      "id": "R1-23",
+      "dimension": "completeness",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The freshness alert's routing channel (email, Teams, pager) is unspecified beyond 'IT agreement on alert routing', and N minutes is undefined.",
+      "remedy": "Record a default N and the alert channel as a decision or an explicit Open Question."
+    },
+    {
+      "id": "R1-24",
+      "dimension": "completeness",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "Shift boundaries (including shifts crossing midnight) and the timezone of MES timestamps are not addressed, though the end-of-shift clustering check and per-shift views depend on them.",
+      "remedy": "State where shift calendars are configured (TaktConfig) and how timestamps are normalized."
+    },
+    {
+      "id": "R1-25",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The coaching success criterion ('at least one coaching conversation per lead per week cites a Takt number') has no measurement method, and the 5% sticky-note reconciliation does not say which source is presumed correct when they differ, given notes are described as flawed.",
+      "remedy": "Name how coaching citations are counted (e.g. lead self-report or a coaching-note field) and how discrepancies in reconciliation are adjudicated."
+    },
+    {
+      "id": "R1-26",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "'What I noticed' calls 'We are a data rich but information poor company' seven words; it is nine (the phrase 'data rich but information poor' is five).",
+      "remedy": "Correct the word count or quote the five-word phrase."
+    },
+    {
+      "id": "R1-27",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The wireframe lives only at a temporary /tmp path that may be gone before the repo exists.",
+      "remedy": "Copy the wireframe next to the design document now, not only once the repo exists."
+    }
+  ],
+  "prior": []
+}

@@ -1,0 +1,7 @@
+# Times are plant local time (the scheduler container's TZ, from TAKT_PLANT_TZ).
+# Ingest every 5 minutes: trailing 48 h plus every still-open job (eng review D3, D9).
+*/5 * * * * python manage.py ingest
+# Nightly 7-day re-read at 02:00 plant time (eng review D9).
+0 2 * * * python manage.py ingest --nightly
+# Trust grade and count-trust revocation after the nightly re-read (Components 4, 4a).
+30 2 * * * python manage.py compute_trust_grades

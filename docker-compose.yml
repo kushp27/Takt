@@ -1,0 +1,64 @@
+# Three containers: web, scheduler, postgres (eng review D1).
+# One command: docker compose up
+name: takt
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+    target: prod
+  image: takt:latest
+  env_file:
+    - path: .env
+      required: false
+  environment: &app-env
+    POSTGRES_HOST: postgres
+    POSTGRES_DB: ${POSTGRES_DB:-takt}
+    POSTGRES_USER: ${POSTGRES_USER:-takt}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-takt}
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-takt}
+      POSTGRES_USER: ${POSTGRES_USER:-takt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-takt}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  web:
+    <<: *app
+    ports:
+      - "${TAKT_HTTP_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  scheduler:
+    <<: *app
+    command: ["docker/entrypoint-scheduler.sh"]
+    environment:
+      <<: *app-env
+      TZ: ${TAKT_PLANT_TZ:-America/Chicago}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      web:
+        condition: service_started
+
+volumes:
+  pgdata:

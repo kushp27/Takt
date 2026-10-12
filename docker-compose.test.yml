@@ -1,0 +1,16 @@
+# Test override: runs pytest inside the test image against the compose Postgres (eng review D8).
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm web pytest
+# Use -p <name> to give parallel worktrees their own Postgres.
+services:
+  web:
+    build:
+      target: test
+    image: takt:test
+    ports: !reset []
+    volumes:
+      - .:/app
+    command: ["pytest"]
+    healthcheck:
+      disable: true
+  scheduler:
+    profiles: ["never"]

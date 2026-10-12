@@ -1,0 +1,82 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Takt wireframe</title>
+<style>
+  body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#222;background:#fff;margin:24px;font-size:13px}
+  .screen{border:1.5px dashed #888;border-radius:6px;padding:16px;margin-bottom:28px}
+  .label{font-size:11px;color:#777;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+  .bar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #bbb;padding-bottom:8px;margin-bottom:12px}
+  .logo{display:flex;gap:8px;align-items:center;font-weight:700;font-size:16px}
+  .icon{width:28px;height:22px;border:1.5px solid #555;border-radius:6px 10px 4px 4px;font-size:9px;display:flex;align-items:center;justify-content:center}
+  .fresh{font-size:12px;color:#555}
+  .row{display:grid;grid-template-columns:150px 1fr 1fr 1fr 150px 110px;gap:8px;align-items:center;border:1px solid #ccc;border-radius:4px;padding:10px;margin-bottom:8px}
+  .head{border:none;font-size:11px;color:#777;padding:0 10px}
+  .big{font-size:18px;font-weight:700}
+  .sub{font-size:11px;color:#666}
+  .spark{height:18px;border-bottom:1px solid #999;background:repeating-linear-gradient(90deg,#fff 0 6px,#eee 6px 12px)}
+  .story{font-size:12px;border-left:3px solid #888;padding-left:8px;margin:4px 0 0}
+  table{border-collapse:collapse;width:100%;margin-top:6px}
+  th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
+  th{font-size:11px;color:#666;font-weight:600;background:#f6f6f6}
+  .grade{display:inline-block;border:1px solid #666;border-radius:3px;padding:1px 6px;font-size:11px}
+  .muted{color:#999}
+  .group{font-weight:700;background:#fafafa}
+  .note{font-size:11px;color:#777;margin-top:8px}
+</style></head><body>
+
+<!-- SCREEN 1: Brian's line health. Design decision: the three metrics sit side by side on one row per line,
+     because the story is in how they interact (on pace + low yield), not in any one number. -->
+<div class="screen">
+  <div class="label">Screen 1 · Line Health (Brian, ops manager) · daily glance</div>
+  <div class="bar">
+    <div class="logo"><div class="icon">tuk</div>Takt</div>
+    <!-- Freshness is always visible: a stalled MES feed must never look current. -->
+    <div class="fresh">Cores Hub data as of 6:42 AM · Dies Hub as of 6:40 AM · Yesterday, 2nd + 3rd shift ▾</div>
+  </div>
+  <div class="row head"><div>Line</div><div>Pace vs takt</div><div>Throughput vs demand</div><div>Yield (found at sort)</div><div>Bottleneck</div><div>14 days</div></div>
+
+  <div class="row">
+    <div><b>Cores Line 1</b><div class="sub">takt 92 s</div></div>
+    <div><span class="big">104%</span><div class="sub">avg cycle 88 s</div></div>
+    <div><span class="big">1,840 / 1,800</span><div class="sub">+40 units</div></div>
+    <div><span class="big">71%</span><div class="sub">top code: voids (38%)</div></div>
+    <div>Injection 3<div class="sub">grade: green</div></div>
+    <div class="spark"></div>
+  </div>
+  <!-- The auto-generated one-line story is the "health check" Brian asked for. -->
+  <div class="story">On pace, but yield is 14 pts under its 14-day average, mostly voids. Look upstream at injection, not at pace.</div>
+  <br>
+  <div class="row">
+    <div><b>Cores Line 2</b><div class="sub">takt 92 s</div></div>
+    <div><span class="big">86%</span><div class="sub">avg cycle 107 s</div></div>
+    <div><span class="big">1,510 / 1,800</span><div class="sub">−290 units</div></div>
+    <div><span class="big">93%</span><div class="sub">top code: UVC (3%)</div></div>
+    <div>Leach 2<div class="sub">grade: amber · counts only</div></div>
+    <div class="spark"></div>
+  </div>
+  <div class="story">Behind takt with good yield. Leach 2 had 2.4 h with no transactions on 3rd shift (starved or down?).</div>
+  <div class="note">Click a line → stations (pace, throughput, yield, trust grade) → operators at that station, same part only.</div>
+</div>
+
+<!-- SCREEN 2: Lead shift view. Replaces the sticky note. Grouped by station + part, never sorted plant-wide. -->
+<div class="screen">
+  <div class="label">Screen 2 · My Shift (lead) · replaces the sticky note</div>
+  <div class="bar">
+    <div class="logo"><div class="icon">tuk</div>Takt · Cores Line 2 · 2nd shift · Tue Oct 13</div>
+    <div class="fresh">Updated 11:15 PM · <u>print sheet</u></div>
+  </div>
+
+  <table>
+    <tr><th>Operator</th><th>Jobs</th><th>Qty</th><th>Units / hr</th><th>vs station + part median</th><th>Hours with no transaction</th><th>Context</th></tr>
+    <tr class="group"><td colspan="7">Injection 3 · part C-4471 · <span class="grade">green: durations OK</span> · median 41 u/hr</td></tr>
+    <tr><td>#1042 Maria</td><td>38</td><td>342</td><td>43</td><td>+5%</td><td>0.3</td><td class="muted">—</td></tr>
+    <tr><td>#1187 Dev</td><td>31</td><td>279</td><td>35</td><td>−15%</td><td>1.1</td><td>2 mold changes on shift</td></tr>
+    <tr><td>#1203 Sam (hired 6 wks ago)</td><td>29</td><td>261</td><td>33</td><td>−20%</td><td>0.4</td><td>tenure &lt; 90 days</td></tr>
+    <!-- Amber = counts are trusted, durations are not: rate columns are blanked, not guessed. -->
+    <tr class="group"><td colspan="7">Leach 2 · part C-4471 · <span class="grade">amber: counts only</span> (64% of completes in last 30 min of shift)</td></tr>
+    <tr><td>#1099 Lena</td><td>12</td><td>480</td><td class="muted">n/a</td><td class="muted">n/a</td><td>2.4</td><td>starved? Injection 3 output gap 7–9 PM</td></tr>
+    <tr class="group"><td colspan="7">Fire (kiln, batch) · <span class="grade">red: excluded from operator metrics</span></td></tr>
+    <tr><td colspan="7" class="muted">Batch process: counts shown at station level only.</td></tr>
+  </table>
+  <div class="note">No cross-station ranking. Operator detail is visible only to this lead and Brian. Each row has "this number looks wrong" (dispute) → flags the transaction for review.</div>
+</div>
+</body></html>

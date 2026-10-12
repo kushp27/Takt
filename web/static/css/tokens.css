@@ -1,0 +1,84 @@
+/* Visual tokens (design review D17). Interim until DESIGN.md exists (TODO D24).
+   Light theme only (D15). Every text colour meets 4.5:1 or better on white. */
+
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; font-style: normal; font-display: swap;
+  src: url("../fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 600; font-style: normal; font-display: swap;
+  src: url("../fonts/ibm-plex-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-style: normal; font-display: swap;
+  src: url("../fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); }
+
+:root {
+  /* Type */
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace; /* job IDs only */
+  --size-table: 14px;
+  --size-body: 16px;
+  --size-status: 18px;
+  --size-title: 22px;
+
+  /* Colour */
+  --ink: #1F2328;      /* 15.8:1 on white */
+  --bg: #FFFFFF;
+  --text-2: #5B6470;   /* 5.9:1 */
+  --line: #D8DEE4;     /* rules and outlines only, never text */
+  --accent: #0F6E6E;   /* 6.0:1; links, focus ring, selection */
+  --behind: #B42318;   /* 6.5:1; "Behind" only */
+  --yield: #B54708;    /* 5.0:1; "Yield problem" only */
+
+  /* Space and shape: 4px scale, 4px radius, no shadows */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --radius: 4px;
+  --control-min-height: 32px; /* D18 */
+}
+
+html { color: var(--ink); background: var(--bg); }
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--size-body);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+a { color: var(--accent); }
+::selection { background: var(--accent); color: #FFFFFF; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+h1 { font-size: var(--size-title); font-weight: 600; margin: 0 0 var(--s4); }
+table { border-collapse: collapse; font-size: var(--size-table); }
+th, td { text-align: left; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--text-2); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--text-2); }
+
+button, .button, input, select, textarea {
+  font: inherit; min-height: var(--control-min-height);
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); color: var(--ink);
+  padding: 0 var(--s3);
+}
+button, .button { cursor: pointer; color: var(--accent); border-color: var(--accent); text-decoration: none;
+  display: inline-flex; align-items: center; }
+
+/* Performance status: colour only when something needs attention, always with a word. */
+.status-behind { color: var(--behind); font-weight: 600; }
+.status-yield { color: var(--yield); font-weight: 600; }
+.status-ok { color: var(--ink); font-weight: 600; }
+
+/* Trust badges (D16): words + grey outline, never fill colour. */
+.badge { display: inline-block; border: 1px solid var(--text-2); border-radius: var(--radius);
+  padding: 0 var(--s1); font-size: 12px; color: var(--text-2); background: transparent; white-space: nowrap; }
+
+/* Layout */
+.site-header { display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
+  padding: var(--s3) var(--s5); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.site-header nav ul { display: flex; gap: var(--s4); list-style: none; margin: 0; padding: 0; flex-wrap: wrap; }
+.site-header nav a { text-decoration: none; display: inline-flex; align-items: center; min-height: var(--control-min-height); }
+.site-header nav a[aria-current="page"] { color: var(--ink); font-weight: 600; }
+.brand { font-weight: 600; color: var(--ink); text-decoration: none; display: inline-flex; gap: var(--s2); align-items: center; }
+.freshness { font-size: var(--size-table); color: var(--text-2); }
+main { padding: var(--s5); max-width: 1440px; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

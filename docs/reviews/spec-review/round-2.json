@@ -1,0 +1,204 @@
+{
+  "version": 2,
+  "round": 2,
+  "document": "/Users/kpatel/.gstack/projects/kpatel/kpatel-none-design-20261012-122926.md",
+  "quality_score": 7,
+  "dimensions": {
+    "completeness": "ISSUES",
+    "consistency": "ISSUES",
+    "clarity": "ISSUES",
+    "scope": "ISSUES",
+    "feasibility": "ISSUES"
+  },
+  "findings": [
+    {
+      "id": "R2-1",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": "only station-level counts are shown.",
+      "problem": "Premise 6 says a red combination shows only station-level counts, and batch stations are red by definition. Component 5 says My Shift shows each operator's counts for batch stations, and the print sheet lists every operator's job and quantity counts. The rules disagree on whether per-operator counts appear for red combinations.",
+      "remedy": "Pick one rule for red and batch combinations: either per-operator counts are shown (with no rates or comparisons), or only station totals are shown. Apply the same rule in premise 6, Component 5, My Shift, and the print sheet."
+    },
+    {
+      "id": "R2-2",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": "Count trust is a separate flag per station, set by the reconciliation in The Assignment.",
+      "problem": "The design has two independent trust flags: the duration grade per station-and-part and count trust per station. It never says how they combine in the views. For example, can a station that is not count-trusted but graded green show operator counts and rates in My Shift or on the print sheet, given that rates are derived from counts? It also does not say what Line Health shows for line pace when the final station is not count-trusted.",
+      "remedy": "Define the display matrix for count trust crossed with the grade across My Shift, the print sheet, station pace, and line pace. Include whether line pace is suppressed, or flagged, when the final station is not count-trusted."
+    },
+    {
+      "id": "R2-3",
+      "dimension": "feasibility",
+      "severity": "blocking",
+      "changed_text": "station only after the audit:**",
+      "problem": "Counts are untrusted by default and become trusted only through reconciliation against one lead's sticky notes in the pilot area. The design gives no way to set count trust for other areas, for Dies Hub stations (build step 6), or for new stations once the sticky notes are retired. Without one, every station outside the pilot stays excluded from pace and bottleneck permanently.",
+      "remedy": "Define how count trust is established outside the pilot and after the sticky notes stop, for example a per-area reconciliation during each rollout, a physical-count sample, or a default with review. Also say who sets the flag and whether it can be revoked."
+    },
+    {
+      "id": "R2-4",
+      "dimension": "feasibility",
+      "severity": "blocking",
+      "changed_text": "**Station pace:** the same formula applied to each station's completed good units.",
+      "problem": "Units required sums over all part families at the line. A station that runs only some families (or is visited by a family more than once) would be measured against demand it never sees. Its station pace would be understated, and the bottleneck, which is chosen as the lowest station pace, would be wrong.",
+      "remedy": "Compute station units required only over the part families routed through that station, scaled by visits if a family passes more than once. Record the routing source (the station registry, Open Question 3)."
+    },
+    {
+      "id": "R2-5",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": "**Station yield** = good units ÷ (good units + scrap units recorded at that station), per part.",
+      "problem": "Pace and yield are both defined on 'good units', but Job has only 'quantity'. The design does not say whether Job.quantity is good output or gross output that includes units later scrapped at the same station. If it is gross, the yield denominator double-counts scrap and pace overstates output.",
+      "remedy": "State whether Job.quantity is good or gross (or add it to Open Question 1), and define good units, for example good = quantity minus scrap found at that station for the same part and shift when quantity is gross."
+    },
+    {
+      "id": "R2-6",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": "operator-level screens are visible only to the builder and Brian, for validation.",
+      "problem": "Gate 1 exists to get HR (and possibly union) approval before operator metrics are shown to the ops manager, among others. Yet before the gate, the design lets Brian, who is the ops manager, see operator-level screens. The gate's purpose and its pre-gate access rule contradict each other.",
+      "remedy": "Either limit pre-gate operator-level access to the builder only (Brian sees aggregate or anonymized validation), or state that Gate 1 covers only the leads' and supervisors' access and get HR's agreement to Brian's validation access first."
+    },
+    {
+      "id": "R2-7",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": "Batch stations are red by definition for operator metrics. Equipment data stays in v2 unless a",
+      "problem": "Batch stations are always red, and equipment data is pulled into v1 or v2 when a critical station, or one Brian cares about, grades red. The kiln therefore permanently triggers the equipment-data pull-forward, which makes the v2 deferral and its trigger ambiguous.",
+      "remedy": "State that a batch-type red does not count toward the equipment-data trigger, or decide explicitly that the kiln's equipment data is in scope."
+    },
+    {
+      "id": "R2-8",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": "reconciles with one lead's sticky notes within 5% for each station marked count-trusted.",
+      "problem": "The Assignment marks a station count-trusted when the sticky notes are found to be wrong, which means its counts can differ from the sticky notes by more than 5%. The success criterion then requires every count-trusted station to reconcile within 5%. Correctly adjudicated stations would fail the criterion, and the criterion is circular.",
+      "remedy": "Restate the audit success criterion: for example, every station has a count-trust decision backed by the 5% check or a physical-evidence adjudication, rather than requiring a 5% match for count-trusted stations."
+    },
+    {
+      "id": "R2-9",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": "pull 10 of the mismatched jobs and check them against the",
+      "problem": "Sticky notes record per-operator job counts, not individual jobs, so 'mismatched jobs' cannot be identified directly from the comparison.",
+      "remedy": "Say to sample 10 transactions from the mismatched operator-day or station-day and verify them against travelers, labels, or bin counts."
+    },
+    {
+      "id": "R2-10",
+      "dimension": "completeness",
+      "severity": "minor",
+      "changed_text": "through an in-app queue and email. The supervisor decides within 2 shifts:",
+      "problem": "Dispute notifications send email, but the Dependencies list does not include a mail relay or SMTP, and Brian's email was deferred partly to avoid one. The design also assumes the supervisor can edit MES records.",
+      "remedy": "Add the mail relay to the Dependencies (or make v1 notifications in-app only), and confirm that supervisors have MES correction rights or name who fixes the record."
+    },
+    {
+      "id": "R2-11",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": "| admin | Configuration only, no operator detail |",
+      "problem": "The admin role has 'no operator detail', yet admins maintain OperatorAlias and the unmapped-operator queue, which expose operator identities and job history.",
+      "remedy": "Clarify that admin sees identities and aliases for mapping but not metrics or comparisons."
+    },
+    {
+      "id": "R2-12",
+      "dimension": "feasibility",
+      "severity": "minor",
+      "changed_text": "otherwise the start timestamp.",
+      "problem": "With start-timestamp selection, jobs open longer than the 7-day look-back, and MES rows deleted as corrections, are never reconciled.",
+      "remedy": "Re-read all jobs held as open regardless of age, and decide how deleted MES rows are detected (for example, a missing-ID sweep within the look-back window)."
+    },
+    {
+      "id": "R2-13",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The scheduler choice is still 'Celery beat, or a management command run by cron', which affects the container set and the IT runbook.",
+      "remedy": "Pick one; cron-run management commands avoid adding Redis or Celery."
+    },
+    {
+      "id": "R2-14",
+      "dimension": "scope",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "A separate React front end adds a JS toolchain for IT to own, while the views are mostly tables with drill-down.",
+      "remedy": "Justify React, or use Django templates (optionally with htmx) to keep one stack."
+    },
+    {
+      "id": "R2-15",
+      "dimension": "feasibility",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "Ingest still queries the production MES databases directly, and it now re-reads 48 hours on every run and 7 days nightly. Load on the transacting systems, and whether a replica exists, are not addressed.",
+      "remedy": "Ask IT about a replica or reporting copy, and bound queries (indexed columns, off-peak nightly look-back)."
+    },
+    {
+      "id": "R2-16",
+      "dimension": "completeness",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The freshness alert's N minutes and its routing channel remain unspecified.",
+      "remedy": "Record a default N and the alert channel, as a decision or an explicit Open Question."
+    },
+    {
+      "id": "R2-17",
+      "dimension": "completeness",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "ShiftCalendar was added, but shifts that cross midnight and the timezone of MES timestamps are still not addressed, though the C share and the per-shift views depend on them.",
+      "remedy": "State how timestamps are normalized and how a shift crossing midnight is assigned to a production day."
+    },
+    {
+      "id": "R2-18",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The coaching success criterion ('cites a Takt number') still has no measurement method.",
+      "remedy": "Name how citations are counted, for example lead self-report or a coaching-note field."
+    },
+    {
+      "id": "R2-19",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "'What I noticed' still calls 'We are a data rich but information poor company' seven words; it is nine.",
+      "remedy": "Correct the word count or quote the five-word phrase."
+    },
+    {
+      "id": "R2-20",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": "was blocked by the sandbox).",
+      "problem": "The wireframe still lives only at a temporary /tmp path, and the note to copy it into the repo was removed.",
+      "remedy": "Copy the wireframe next to the design document now and reference that path."
+    }
+  ],
+  "prior": [
+    {"id": "R1-1", "status": "resolved", "evidence": "Premise 5 now defines takt time as planned available time ÷ customer demand, in seconds per unit.", "current_id": null},
+    {"id": "R1-2", "status": "resolved", "evidence": "Takt is per part family (premise 5). Line pace sums units required over families, and operator rate compares against the station-and-part median with the per-part takt rate shown. A new station-routing issue is tracked separately as R2-4.", "current_id": null},
+    {"id": "R1-3", "status": "resolved", "evidence": "Component 5 defines batch-station metrics (batches per shift, units per batch, cycle time, no operator rates), and the Assignment flags suspected batch stations.", "current_id": null},
+    {"id": "R1-4", "status": "resolved", "evidence": "Premise 4 narrows v1 context to part mix, transaction gaps, upstream output gap, and tenure; downtime and blocked time are deferred to v2 equipment data.", "current_id": null},
+    {"id": "R1-5", "status": "resolved", "evidence": "Operator.hire_date was added to the schema, with the HR roster in Dependencies and Open Question 7, and tenure is omitted if there is no roster.", "current_id": null},
+    {"id": "R1-6", "status": "resolved", "evidence": "Premise 1 makes counts untrusted until reconciliation, the Assignment defines the not-count-trusted outcome, and the decision rules pause the build if most stations fail. Rollout beyond the pilot is tracked as R2-3.", "current_id": null},
+    {"id": "R1-7", "status": "resolved", "evidence": "Component 4 states D/C/O cutoffs (green under 10%, red over 25%), puts them in the admin, names the tuner and owner, and uses one code path for the audit and the nightly job.", "current_id": null},
+    {"id": "R1-8", "status": "resolved", "evidence": "Premise 6, Component 4, and the Assignment all grade per station-and-part with one green/amber/red display rule set. A remaining red-versus-batch display conflict is new: R2-1.", "current_id": null},
+    {"id": "R1-9", "status": "resolved", "evidence": "Line pace is count-based on the final station only. The bottleneck is chosen among count-trusted stations, with coverage shown.", "current_id": null},
+    {"id": "R1-10", "status": "resolved", "evidence": "Component 1 defines the MES transaction-ID upsert key, last-modified selection, the 48-hour and 7-day look-backs, and storage of open jobs with completed_at NULL.", "current_id": null},
+    {"id": "R1-11", "status": "resolved", "evidence": "ScrapEvent now carries ID, hub, timestamp, shift, and part. The station and line (RTY) yield formulas are defined, and the scrap source is Open Question 5 and a Dependency. The good-units definition is tracked as R2-5.", "current_id": null},
+    {"id": "R1-12", "status": "resolved", "evidence": "Component 2 puts OperatorAlias in the Django admin, names its owners, and defines counting, display, exclusion, the admin queue, and backfill for unmapped aliases.", "current_id": null},
+    {"id": "R1-13", "status": "resolved", "evidence": "Component 8 commits the dispute flow: the supervisor is notified and decides within 2 shifts, a confirmed error becomes a Takt-side exclusion that persists, and the MES record is fixed by the supervisor.", "current_id": null},
+    {"id": "R1-14", "status": "resolved", "evidence": "The print sheet is limited to job and quantity counts and totals, with no rates, medians, or comparisons, and a 'For lead use' footer.", "current_id": null},
+    {"id": "R1-15", "status": "resolved", "evidence": "Component 7 adds a supervisor role (their areas, all shifts), and the target-user table and premise 2 add the Area view.", "current_id": null},
+    {"id": "R1-16", "status": "resolved", "evidence": "Gate 1 blocks operator-level views until HR sign-off, and role-based local auth moved to build step 2. The new contradiction over Brian's pre-gate access is R2-6.", "current_id": null},
+    {"id": "R1-17", "status": "resolved", "evidence": "Component 6 states a rule-based summary (no LLM): a 3x3 pace and yield classification against a 14-day ±1 SD baseline selects one of nine templates.", "current_id": null},
+    {"id": "R1-18", "status": "resolved", "evidence": "Brian's daily email is explicitly deferred to v1.1 with a stated trigger, in Approaches Considered and in the Deferred list.", "current_id": null},
+    {"id": "R1-19", "status": "resolved", "evidence": "Component 3 defines the transaction gap (shift time minus breaks minus job time), labeled 'time with no transaction', not 'idle'.", "current_id": null},
+    {"id": "R1-20", "status": "persisting", "evidence": "Component 1 still says 'Celery beat, or a management command run by cron'.", "current_id": "R2-13"},
+    {"id": "R1-21", "status": "persisting", "evidence": "The stack still specifies a React front end, with no justification.", "current_id": "R2-14"},
+    {"id": "R1-22", "status": "persisting", "evidence": "There is no mention of a replica or of query bounding; the look-backs increase load.", "current_id": "R2-15"},
+    {"id": "R1-23", "status": "persisting", "evidence": "Component 9 still says 'within N minutes' and names no channel.", "current_id": "R2-16"},
+    {"id": "R1-24", "status": "persisting", "evidence": "ShiftCalendar was added, but timezone normalization and midnight-crossing shifts remain unaddressed.", "current_id": "R2-17"},
+    {"id": "R1-25", "status": "persisting", "evidence": "Reconciliation adjudication is now defined (physical evidence), but the coaching citation still has no measurement method in Success Criteria.", "current_id": "R2-18"},
+    {"id": "R1-26", "status": "persisting", "evidence": "'That's the whole pitch in seven words' is unchanged.", "current_id": "R2-19"},
+    {"id": "R1-27", "status": "persisting", "evidence": "The wireframe is still at a /tmp path, and the copy-to-repo note was removed.", "current_id": "R2-20"}
+  ]
+}

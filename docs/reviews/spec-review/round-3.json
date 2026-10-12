@@ -1,0 +1,289 @@
+{
+  "version": 2,
+  "round": 3,
+  "document": "/Users/kpatel/.gstack/projects/kpatel/kpatel-none-design-20261012-122926.md",
+  "quality_score": 7,
+  "dimensions": {
+    "completeness": "ISSUES",
+    "consistency": "ISSUES",
+    "clarity": "ISSUES",
+    "scope": "ISSUES",
+    "feasibility": "ISSUES"
+  },
+  "findings": [
+    {
+      "id": "R3-1",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": "physical-count sample of 20 jobs per station (bin, traveler, or label counts).",
+      "problem": "Component 4a adds two new ways to establish count trust: a one-week reconciliation against the lead's tally for each later area, and a 20-job physical-count sample. Neither has a pass criterion. The design does not say what tolerance the later-area tally match uses, or how many of the 20 sampled jobs must match, and within what tolerance, for a station to become count-trusted. The flag decides whether a station appears in pace, bottleneck, and line pace at all.",
+      "remedy": "State the pass rule for each path. For example: the later-area tally uses the same 5% rule and 10-job adjudication as The Assignment, and the physical sample passes when at least 19 of 20 jobs match the transaction quantity exactly, or the total is within 5%."
+    },
+    {
+      "id": "R3-2",
+      "dimension": "completeness",
+      "severity": "blocking",
+      "changed_text": "automatically, when confirmed count disputes exceed 5% of a station's jobs over a rolling 2 weeks;",
+      "problem": "Component 4a defines how count trust is revoked, automatically or manually, but not how a revoked station regains it. The 'How it is established' list covers only the pilot area, later areas, and new stations. A revoked station drops out of station pace and the bottleneck, and if it is a line's final station, line pace is suppressed, with no defined way back.",
+      "remedy": "Define re-establishment after revocation: for example, a fresh 20-job physical sample (or a one-week reconciliation) once the supervisor reports the transaction discipline fixed, with the flag set by the plant admin and recorded with its evidence."
+    },
+    {
+      "id": "R3-3",
+      "dimension": "feasibility",
+      "severity": "blocking",
+      "changed_text": "number of visits a family makes to it. The routing comes from the station registry (Open Question 3).",
+      "problem": "Station pace now depends on a routing that says which part families pass through each station, and how many times. The committed shared schema has no entity for it: Station has only line, sequence position, and type, and Part has only part family. The new formula cannot be computed from the schema as specified.",
+      "remedy": "Add a routing entity to the shared schema (for example, Routing: part family, station, visit count) and say who maintains it in the admin, or where it is imported from, if an MES routing exists."
+    },
+    {
+      "id": "R3-4",
+      "dimension": "consistency",
+      "severity": "blocking",
+      "changed_text": "No operator counts or rates; excluded from station pace and bottleneck",
+      "problem": "Under the new matrix, a station that is not count-trusted shows no operator counts, and the print sheet follows the matrix. So the sticky-note replacement is blank for those stations. Yet the lead-adoption success criterion requires leads in the pilot area to stop collecting sticky notes, and the decision rules let the build proceed when only some stations fail count trust. At a station that is not count-trusted, leads either keep the sticky note, which fails the criterion, or lose the counts entirely.",
+      "remedy": "State what leads do at stations that are not count-trusted, for example keep the sticky note there until trust is established. Scope the lead-adoption criterion to count-trusted stations, or require all pilot stations to be count-trusted before My Shift goes live."
+    },
+    {
+      "id": "R3-5",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": "Operator counts only (no rates, comparisons, or transaction gap); station pace",
+      "problem": "The matrix names the transaction gap only in the red cell. It does not say whether the amber and not-count-trusted cells show the transaction gap, the upstream output gap, tenure, or the per-row dispute button. The transaction gap depends on durations, which amber does not fully trust.",
+      "remedy": "Add the transaction gap, the upstream output gap, tenure, and dispute availability to each matrix cell, or add a note covering them."
+    },
+    {
+      "id": "R3-6",
+      "dimension": "consistency",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "Premise 1 still says counts 'must reconcile against the sticky notes', while Component 4a now also allows a physical-count sample when no tally exists.",
+      "remedy": "Reword premise 1 to say counts must pass the count-trust check in Component 4a."
+    },
+    {
+      "id": "R3-7",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": "Brian validates on station-level views and on anonymized operator rows",
+      "problem": "On a small station-and-part crew, anonymized rows ('Operator A, B, C') can easily be re-identified by the ops manager. The design does not say whether Gate 1 approvers accept this pre-gate validation.",
+      "remedy": "Set a minimum crew size for anonymized rows, or include Brian's anonymized validation access in the Gate 1 conversation."
+    },
+    {
+      "id": "R3-8",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The Assignment still says to 'pull 10 of the mismatched jobs', but sticky notes record per-operator job counts, not individual jobs, so mismatched jobs cannot be identified directly.",
+      "remedy": "Say to sample 10 transactions from the mismatched operator-day or station-day and verify them against travelers, labels, or bin counts."
+    },
+    {
+      "id": "R3-9",
+      "dimension": "completeness",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "Dispute notifications still send email, but the Dependencies list has no mail relay. Supervisors' MES correction rights are still assumed. Automatic count-trust revocation now also depends on disputes being confirmed promptly.",
+      "remedy": "Add the mail relay to the Dependencies (or make v1 notifications in-app only), and confirm that supervisors have MES correction rights or name who fixes the record."
+    },
+    {
+      "id": "R3-10",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The admin role still reads 'Configuration only, no operator detail', yet admins maintain OperatorAlias and the unmapped-operator queue, which expose operator identities.",
+      "remedy": "Clarify that admin sees identities and aliases for mapping but not metrics or comparisons."
+    },
+    {
+      "id": "R3-11",
+      "dimension": "feasibility",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "With start-timestamp selection, jobs open longer than the 7-day look-back, and MES rows deleted as corrections, are never reconciled.",
+      "remedy": "Re-read all jobs held as open regardless of age, and decide how deleted MES rows are detected (for example, a missing-ID sweep within the look-back window)."
+    },
+    {
+      "id": "R3-12",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The scheduler is still 'Celery beat, or a management command run by cron'.",
+      "remedy": "Pick one; cron-run management commands avoid adding Redis or Celery."
+    },
+    {
+      "id": "R3-13",
+      "dimension": "scope",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The stack still specifies a React front end, with no justification, for views that are mostly tables with drill-down.",
+      "remedy": "Justify React, or use Django templates (optionally with htmx) to keep one stack."
+    },
+    {
+      "id": "R3-14",
+      "dimension": "feasibility",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "Ingest still queries the production MES databases directly with 48-hour and 7-day look-backs. A replica and query load are not addressed.",
+      "remedy": "Ask IT about a replica or reporting copy, and bound queries (indexed columns, off-peak nightly look-back)."
+    },
+    {
+      "id": "R3-15",
+      "dimension": "completeness",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The freshness alert still says 'within N minutes' and names no channel.",
+      "remedy": "Record a default N and the alert channel, as a decision or an explicit Open Question."
+    },
+    {
+      "id": "R3-16",
+      "dimension": "completeness",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "Timestamp timezone normalization and shifts that cross midnight are still not addressed, though the C share, shift scoping, and good units per shift depend on them.",
+      "remedy": "State how timestamps are normalized and how a shift crossing midnight is assigned to a production day."
+    },
+    {
+      "id": "R3-17",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The coaching success criterion ('cites a Takt number') still has no measurement method.",
+      "remedy": "Name how citations are counted, for example lead self-report or a coaching-note field."
+    },
+    {
+      "id": "R3-18",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "'What I noticed' still calls 'We are a data rich but information poor company' seven words; it is nine.",
+      "remedy": "Correct the word count or quote the shorter phrase."
+    },
+    {
+      "id": "R3-19",
+      "dimension": "clarity",
+      "severity": "minor",
+      "changed_text": null,
+      "problem": "The wireframe still lives only at a temporary /tmp path.",
+      "remedy": "Copy the wireframe next to the design document and reference that path."
+    }
+  ],
+  "prior": [
+    {
+      "id": "R2-1",
+      "status": "resolved",
+      "evidence": "The matrix's Red column (count-trusted) shows operator counts only, with no rates, comparisons, or transaction gap. Component 5 points batch stations at that column, and the print sheet shows exactly the counts the matrix allows. Premise 6, Component 5, My Shift, and the print sheet now agree.",
+      "current_id": null
+    },
+    {
+      "id": "R2-2",
+      "status": "resolved",
+      "evidence": "Component 4a defines the count-trust × duration-grade display matrix covering operator counts, rates, and station pace, plus the print sheet. Line pace is suppressed when the final station is not count-trusted.",
+      "current_id": null
+    },
+    {
+      "id": "R2-3",
+      "status": "resolved",
+      "evidence": "Component 4a defines trust establishment for later areas, Dies Hub, and new stations (one-week reconciliation or a 20-job physical sample), who proposes and sets the flag, and automatic and manual revocation. The missing pass criteria and re-trust path are new refinements: R3-1 and R3-2.",
+      "current_id": null
+    },
+    {
+      "id": "R2-4",
+      "status": "resolved",
+      "evidence": "Station pace now sums units required only over part families routed through the station, multiplied by visits, with routing from the registry (Open Question 3). The schema gap for routing is new: R3-3.",
+      "current_id": null
+    },
+    {
+      "id": "R2-5",
+      "status": "resolved",
+      "evidence": "Component 3 defines good units for both the good-output and gross-output cases, and Open Question 1 asks which one Job.quantity is. The yield denominator is stated.",
+      "current_id": null
+    },
+    {
+      "id": "R2-6",
+      "status": "resolved",
+      "evidence": "Gate 1 now limits named operator-level screens to the builder before sign-off. Brian validates on station-level views and anonymized rows.",
+      "current_id": null
+    },
+    {
+      "id": "R2-7",
+      "status": "resolved",
+      "evidence": "Premise 6 and the Deferred list restrict the equipment-data trigger to flow stations, and state that a batch station's red grade does not trigger it. Kiln equipment data is a separate v2 decision.",
+      "current_id": null
+    },
+    {
+      "id": "R2-8",
+      "status": "resolved",
+      "evidence": "The audit success criterion now requires a count-trust decision for every station, backed by either a 5% match or the physical-evidence check.",
+      "current_id": null
+    },
+    {
+      "id": "R2-9",
+      "status": "persisting",
+      "evidence": "The Assignment step 2 still says 'pull 10 of the mismatched jobs'.",
+      "current_id": "R3-8"
+    },
+    {
+      "id": "R2-10",
+      "status": "persisting",
+      "evidence": "Component 8 still notifies by email, the Dependencies list still has no mail relay, and supervisor MES correction rights are still assumed.",
+      "current_id": "R3-9"
+    },
+    {
+      "id": "R2-11",
+      "status": "persisting",
+      "evidence": "The roles table still says admin is 'Configuration only, no operator detail'.",
+      "current_id": "R3-10"
+    },
+    {
+      "id": "R2-12",
+      "status": "persisting",
+      "evidence": "Component 1 is unchanged: start-timestamp fallback, no long-open re-read, and no deletion detection.",
+      "current_id": "R3-11"
+    },
+    {
+      "id": "R2-13",
+      "status": "persisting",
+      "evidence": "Component 1 still says 'Celery beat, or a management command run by cron'.",
+      "current_id": "R3-12"
+    },
+    {
+      "id": "R2-14",
+      "status": "persisting",
+      "evidence": "The stack still lists a React front end, with no justification.",
+      "current_id": "R3-13"
+    },
+    {
+      "id": "R2-15",
+      "status": "persisting",
+      "evidence": "There is still no mention of a replica or of query bounding.",
+      "current_id": "R3-14"
+    },
+    {
+      "id": "R2-16",
+      "status": "persisting",
+      "evidence": "Component 9 still says 'within N minutes', with no channel.",
+      "current_id": "R3-15"
+    },
+    {
+      "id": "R2-17",
+      "status": "persisting",
+      "evidence": "Timezone normalization and midnight-crossing shifts are still unaddressed.",
+      "current_id": "R3-16"
+    },
+    {
+      "id": "R2-18",
+      "status": "persisting",
+      "evidence": "The coaching success criterion is unchanged, with no measurement method.",
+      "current_id": "R3-17"
+    },
+    {
+      "id": "R2-19",
+      "status": "persisting",
+      "evidence": "'That's the whole pitch in seven words' is unchanged.",
+      "current_id": "R3-18"
+    },
+    {
+      "id": "R2-20",
+      "status": "persisting",
+      "evidence": "The wireframe is still at /tmp/claude-501/gstack-sketch.2gm2Gy/sketch.html.",
+      "current_id": "R3-19"
+    }
+  ]
+}
