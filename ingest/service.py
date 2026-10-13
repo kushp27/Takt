@@ -3,8 +3,8 @@
 One run per hub, all inside one database transaction: if the MES becomes unreachable
 mid-run (MesUnavailable), or anything else goes wrong, nothing from that run is
 committed; only a failed IngestRun row is written afterwards. A transaction-level
-advisory lock per hub makes an overlapping run (e.g. a slow nightly re-read still going
-when the 5-minute cron fires) skip instead of racing.
+advisory lock per hub makes an overlapping 5-minute run (e.g. while a slow nightly re-read
+is still going) skip instead of racing; the nightly itself waits for the lock.
 
 Naive MES times are localized with Hub.plant_timezone via zoneinfo and stored UTC
 (eng review D2). Which instant stamps a Job's shift is decided in one place:
@@ -241,9 +241,22 @@ class _LockHeld(Exception):
     pass
 
 
-def _try_lock(hub):
-    """Transaction-level advisory lock for this hub; released when the run's transaction ends."""
+# How long a nightly re-read waits for a running 5-minute ingest to finish (both fire at 02:00).
+NIGHTLY_LOCK_WAIT = "10min"
+
+
+def _try_lock(hub, wait=False):
+    """Transaction-level advisory lock for this hub; released when the run's transaction ends.
+
+    wait=True (the nightly) blocks up to NIGHTLY_LOCK_WAIT instead of skipping, so the D9
+    02:00 re-read is never lost to the */5 run that starts at the same minute.
+    """
     with connection.cursor() as cur:
+        if wait:
+            cur.execute(f"SET LOCAL lock_timeout = '{NIGHTLY_LOCK_WAIT}'")
+            cur.execute("SELECT pg_advisory_xact_lock(%s, %s)", [LOCK_NAMESPACE, hub.pk])
+            cur.execute("SET LOCAL lock_timeout = DEFAULT")
+            return True
         cur.execute("SELECT pg_try_advisory_xact_lock(%s, %s)", [LOCK_NAMESPACE, hub.pk])
         return cur.fetchone()[0]
 
@@ -270,7 +283,7 @@ def run_ingest(hub, nightly=False, lookback=None, now=None, adapter=None):
     t0 = time.monotonic()
     try:
         with transaction.atomic():
-            if not _try_lock(hub):
+            if not _try_lock(hub, wait=mode == IngestRun.NIGHTLY):
                 raise _LockHeld()
             if adapter is None:
                 adapter = get_adapter(hub)

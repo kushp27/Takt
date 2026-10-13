@@ -257,6 +257,27 @@ def test_overlapping_run_is_skipped_while_the_hub_lock_is_held(mes):
     assert m.Job.objects.count() == 1
 
 
+def test_nightly_waits_for_the_hub_lock_instead_of_skipping(mes):
+    """D9: the 02:00 nightly and the */5 run start together; the nightly must not be skipped."""
+    import threading
+
+    p = small_plant()
+    code, part = p["s1"].hub_station_code, p["part"].hub_part_code
+    mes.insert_jobs([mes_row(1, code, part, "OP1", naive(2026, 10, 5, 8), naive(2026, 10, 5, 8, 30))])
+    from ingest.service import LOCK_NAMESPACE
+
+    holder = fake_mes.connect(autocommit=False)
+    holder.execute("SELECT pg_advisory_xact_lock(%s, %s)", [LOCK_NAMESPACE, p["hub"].pk])
+    release = threading.Timer(1.0, lambda: (holder.rollback(), holder.close()))
+    release.start()
+    try:
+        run = run_ingest(p["hub"], nightly=True, now=_now(2026, 10, 5, 12))
+    finally:
+        release.join()
+    assert run is not None and run.ok and run.mode == m.IngestRun.NIGHTLY
+    assert m.Job.objects.count() == 1
+
+
 def test_any_error_records_failed_run_and_other_hubs_still_ingest(mes, monkeypatch):
     """A bug (not just MesUnavailable) in one hub's run: that hub commits nothing and gets a
     failed IngestRun, the next hub still ingests, and the command exits non-zero."""
