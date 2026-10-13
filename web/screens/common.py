@@ -29,6 +29,12 @@ def area_hub(area, lines=None):
     return lines[0].hub if lines else None
 
 
+def on_shift_hub(lines, shift):
+    """A shift belongs to one hub: with a shift chosen, only that hub's lines (never another hub's
+    same-named shift). All lines when no shift is chosen."""
+    return [ln for ln in lines if shift is None or ln.hub_id == shift.hub_id]
+
+
 def unique_hubs(lines):
     seen = {}
     for ln in lines:

@@ -18,7 +18,7 @@ from core.models import Line, Part, Station
 from metrics import api
 from web import windows
 
-from .common import is_lead, unique_hubs
+from .common import is_lead, on_shift_hub, unique_hubs
 
 METRIC_ROLES = (Profile.OPS_MANAGER, Profile.SUPERVISOR, Profile.LEAD)
 
@@ -40,6 +40,7 @@ def line_health(request):
         ctx = page_context(request, _scope(window))
     except PageTokenRejected:
         return hx_refresh()  # the page fetched by htmx (no token to reuse): reload it, mint a new token
+    lines = on_shift_hub(lines, window.shift)
     rows = api.line_health(lines, window.date_from, window.date_to, shift=window.shift) if lines else []
     picker = windows.picker(request, window, reverse("line_health"), allow_all_shifts=not is_lead(request.user),
                             show_days=True)
@@ -58,6 +59,8 @@ def line_stations(request, line_id):
         window = windows.line_health_window(request, [line.hub])
     except windows.OutOfScopeShift:
         return render_out_of_scope(request, reason="shift")
+    if not on_shift_hub([line], window.shift):
+        return render_out_of_scope(request, reason="shift")
     rows = api.station_rows(line, window.metrics)
     return render(request, "web/partials/stations.html", {"line": line, "rows": rows, "window": window})
 
@@ -73,6 +76,8 @@ def station_operators(request, station_id):
     try:
         window = windows.line_health_window(request, [station.line.hub])
     except windows.OutOfScopeShift:
+        return render_out_of_scope(request, reason="shift")
+    if not on_shift_hub([station.line], window.shift):  # another hub's same-named shift
         return render_out_of_scope(request, reason="shift")
     part = None
     part_id = request.GET.get("part_id", "")

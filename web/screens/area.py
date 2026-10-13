@@ -17,7 +17,7 @@ from disputes import service as disputes
 from metrics import api
 from web import windows
 
-from .common import area_hub, area_lines, is_decider, is_lead
+from .common import area_hub, area_lines, is_decider, is_lead, on_shift_hub
 
 
 @operator_bearing
@@ -33,10 +33,12 @@ def area(request, area_id):
     ctx = page_context(request, OperatorScope(
         area_ids=[area.pk], shift_ids=[window.shift.pk] if window.shift else None,
         date_from=window.date_from, date_to=window.date_to))
-    rows = api.line_health(lines, window.date_from, window.date_to, shift=window.shift) if lines else []
+    shift_lines = on_shift_hub(lines, window.shift)
+    rows = api.line_health(shift_lines, window.date_from, window.date_to, shift=window.shift) if shift_lines else []
 
     lead = is_lead(request.user)
-    names, comparison = _comparison(lines, window.date_to, only=window.shift.name if lead and window.shift else None)
+    names, comparison = _comparison(shift_lines if lead else lines, window.date_to,
+                                    only=window.shift.name if lead and window.shift else None)
 
     summary = disputes.open_summary([area], windows.now()) if is_decider(request.user) else None
     current = None
