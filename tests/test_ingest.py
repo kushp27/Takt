@@ -49,8 +49,12 @@ def test_naive_local_times_stored_utc_and_third_shift_is_one_production_day(mes)
 
 
 def test_dst_fall_back_ambiguous_hour_lands_once_each(mes):
-    """2026-11-01 01:00-02:00 repeats. Two jobs in the repeated hour, one per occurrence,
-    store the same naive times; both land exactly once, on the 3rd shift of Oct 31."""
+    """2026-11-01 01:00-02:00 repeats. Jobs 10 and 11 have identical naive times; in the
+    plant they may have run in different occurrences of the hour, but a naive MES cannot
+    say which, so Takt reads both as the first (CDT). Each still lands exactly once, on the
+    3rd shift of Oct 31. Job 12's naive end is before its start, so its completion is read
+    as the second occurrence (CST) and its duration is the real 30 min. The residual +/-1 h
+    case is documented on ingest.service.localize_pair."""
     p = small_plant()
     code, part = p["s1"].hub_station_code, p["part"].hub_part_code
     mes.insert_jobs([
@@ -90,9 +94,9 @@ def test_fixture_fall_back_range_no_double_counting_or_drops(mes):
     w_start = datetime(2026, 10, 31, 23, tzinfo=CHI).astimezone(UTC)
     w_end = datetime(2026, 11, 1, 7, tzinfo=CHI).astimezone(UTC)
     assert w_end - w_start == timedelta(hours=9)
-    assert all(w_start <= j.completed_at < w_end for j in night.exclude(completed_at=None))
-    # nothing completed inside that night is stamped anywhere else
-    leaked = m.Job.objects.filter(hub=hub, completed_at__gte=w_start, completed_at__lt=w_end).exclude(
+    # stamped by start (user decision 2026-10-12): exactly the jobs started in that 9-hour night
+    assert all(w_start <= j.started_at < w_end for j in night)
+    leaked = m.Job.objects.filter(hub=hub, started_at__gte=w_start, started_at__lt=w_end).exclude(
         shift=third, production_date=date(2026, 10, 31))
     assert not leaked.exists()
 
@@ -110,7 +114,8 @@ def test_default_fixture_includes_spring_forward_night(mes):
 
 def test_job_opened_day0_closed_day9_lands_via_open_job_reread(mes):
     """Eng review D3: a job closed after the 7-day look-back still lands. The MES's
-    last-modified is left at day 0 so only the open-job re-read can find the close."""
+    last-modified is left at day 0 so only the open-job re-read can find the close.
+    Stamped by start (user decision 2026-10-12), it counts on day 0's shift and never moves."""
     p = small_plant()
     code, part = p["s1"].hub_station_code, p["part"].hub_part_code
     start = naive(2026, 10, 1, 8, 0)
@@ -125,7 +130,7 @@ def test_job_opened_day0_closed_day9_lands_via_open_job_reread(mes):
     job.refresh_from_db()
     assert run.open_jobs_reread == 1
     assert job.completed_at == datetime(2026, 10, 10, 9, tzinfo=CHI)
-    assert (job.shift, job.production_date) == (p["first"], date(2026, 10, 10))  # counts on the day it closed
+    assert (job.shift, job.production_date) == (p["first"], date(2026, 10, 1))  # day 0's shift, unmoved
 
 
 def test_ingest_never_touches_exclusion_fields(mes):
@@ -162,6 +167,29 @@ def test_unknown_codes_counted_unmapped_alias_created_and_mapping_backfills(mes,
     assert m.Job.objects.get(mes_id="1").alias.operator == op  # history follows the alias
 
 
+def test_skipped_rows_do_not_create_unmapped_aliases(mes):
+    p = small_plant()
+    code, part = p["s1"].hub_station_code, p["part"].hub_part_code
+    mes.insert_jobs([
+        mes_row(1, "NOPE-1", part, "GHOST-1", naive(2026, 10, 5, 9), naive(2026, 10, 5, 9, 30)),
+        mes_row(2, code, "NOPE-P", "GHOST-2", naive(2026, 10, 5, 9), naive(2026, 10, 5, 9, 30)),
+        mes_row(3, code, part, "REAL-1", naive(2026, 10, 5, 9), naive(2026, 10, 5, 9, 30)),
+    ])
+    run = run_ingest(p["hub"], now=_now(2026, 10, 5, 12))
+    assert run.rows_skipped == 2
+    assert set(m.OperatorAlias.objects.values_list("hub_operator_id", flat=True)) == {"REAL-1"}
+
+
+def test_new_scrap_code_is_created_and_noted_on_the_run(mes):
+    p = small_plant()
+    code, part = p["s1"].hub_station_code, p["part"].hub_part_code
+    mes.insert_scrap([(1, "cores", code, part, "SYN-NEWX", 3, naive(2026, 10, 5, 8, 40), naive(2026, 10, 5, 8, 40))])
+    run = run_ingest(p["hub"], now=_now(2026, 10, 5, 12))
+    assert m.ScrapEvent.objects.get().quantity == 3  # kept: it still counts against yield
+    assert run.rows_skipped == 0
+    assert "new scrap code 'SYN-NEWX' (no description or cause hint yet): 1 row(s)" in run.skipped_detail
+
+
 def test_ingest_run_logged_and_hub_freshness_updated(mes):
     p = small_plant()
     code, part = p["s1"].hub_station_code, p["part"].hub_part_code
@@ -175,31 +203,118 @@ def test_ingest_run_logged_and_hub_freshness_updated(mes):
     ev = m.ScrapEvent.objects.get()
     assert (ev.shift, ev.production_date, ev.quantity) == (p["first"], date(2026, 10, 5), 2)
     assert ev.scrap_code.code == "SYN-VOID"
+    fresh_at = hub.last_new_transaction_at
     second = run_ingest(p["hub"], now=_now(2026, 10, 5, 12, 5))
     assert second.rows_changed == 0
+    hub.refresh_from_db()
+    assert hub.last_new_transaction_at == fresh_at  # an unchanged re-run does not look like new data
+    assert hub.last_successful_ingest_at > fresh_at
 
 
-def test_mes_unreachable_mid_run_exits_non_zero_and_commits_nothing(mes, monkeypatch):
+def test_restamp_only_writes_do_not_move_freshness(mes):
+    """A Takt-side re-stamp (calendar changed, then ingest re-reads the row) is written but is
+    not a new MES transaction, so last_new_transaction_at stays put."""
+    p = small_plant()
+    code, part = p["s1"].hub_station_code, p["part"].hub_part_code
+    mes.insert_jobs([mes_row(1, code, part, "OP1", naive(2026, 10, 5, 14, 20), naive(2026, 10, 5, 14, 40))])
+    run_ingest(p["hub"], now=_now(2026, 10, 5, 16))
+    fresh_at = m.Hub.objects.get(pk=p["hub"].pk).last_new_transaction_at
+    m.Shift.objects.filter(pk=p["first"].pk).update(end_time=time(14))
+    m.Shift.objects.filter(pk=p["second"].pk).update(start_time=time(14))
+    run = run_ingest(p["hub"], now=_now(2026, 10, 5, 16, 5))
+    assert run.rows_changed == 1 and m.Job.objects.get().shift == p["second"]
+    assert m.Hub.objects.get(pk=p["hub"].pk).last_new_transaction_at == fresh_at
+
+
+def test_backfill_mode_and_lookback_recorded_and_nightly_days_rejected(mes):
+    p = small_plant()
+    run = run_ingest(p["hub"], lookback=timedelta(days=30), now=_now(2026, 10, 5, 12))
+    assert (run.mode, run.lookback_hours) == (m.IngestRun.BACKFILL, 720)
+    nightly = run_ingest(p["hub"], nightly=True, now=_now(2026, 10, 5, 12))
+    assert (nightly.mode, nightly.lookback_hours) == (m.IngestRun.NIGHTLY, 168)
+    assert run_ingest(p["hub"], now=_now(2026, 10, 5, 12)).lookback_hours == 48
+    with pytest.raises(ValueError):
+        run_ingest(p["hub"], nightly=True, lookback=timedelta(days=3))
+    with pytest.raises(CommandError):
+        call_command("ingest", "--nightly", "--days", "3", verbosity=0)
+
+
+def test_overlapping_run_is_skipped_while_the_hub_lock_is_held(mes):
+    p = small_plant()
+    code, part = p["s1"].hub_station_code, p["part"].hub_part_code
+    mes.insert_jobs([mes_row(1, code, part, "OP1", naive(2026, 10, 5, 8), naive(2026, 10, 5, 8, 30))])
+    from ingest.service import LOCK_NAMESPACE
+
+    holder = fake_mes.connect(autocommit=False)  # another ingest process, mid-run
+    try:
+        holder.execute("SELECT pg_advisory_xact_lock(%s, %s)", [LOCK_NAMESPACE, p["hub"].pk])
+        assert run_ingest(p["hub"], now=_now(2026, 10, 5, 12)) is None
+        assert m.IngestRun.objects.count() == 0 and m.Job.objects.count() == 0  # nothing recorded as failed
+    finally:
+        holder.rollback()
+        holder.close()
+    assert run_ingest(p["hub"], now=_now(2026, 10, 5, 12)).ok  # lock released: runs normally
+    assert m.Job.objects.count() == 1
+
+
+def test_any_error_records_failed_run_and_other_hubs_still_ingest(mes, monkeypatch):
+    """A bug (not just MesUnavailable) in one hub's run: that hub commits nothing and gets a
+    failed IngestRun, the next hub still ingests, and the command exits non-zero."""
+    cores = small_plant(code="cores")
+    dies = small_plant(code="dies")
+    lm = datetime.now() - timedelta(hours=1)  # inside the real-clock 48 h window the command uses
+    mes.insert_jobs([
+        mes_row(1, cores["s1"].hub_station_code, cores["part"].hub_part_code, "OP1", lm, lm, hub="cores"),
+        mes_row(2, dies["s1"].hub_station_code, dies["part"].hub_part_code, "OP2", lm, lm, hub="dies"),
+    ])
+    from ingest import service
+
+    real = service._HubContext.upsert_jobs
+
+    def buggy(self, rows):
+        real(self, rows)
+        if self.hub.code == "cores":
+            raise KeyError("boom")
+
+    monkeypatch.setattr(service._HubContext, "upsert_jobs", buggy)
+    with pytest.raises(CommandError, match="cores: KeyError"):
+        call_command("ingest", verbosity=0)
+    assert not m.Job.objects.filter(hub=cores["hub"]).exists()  # rolled back, whole run
+    assert m.Job.objects.filter(hub=dies["hub"]).count() == 1
+    runs = {r.hub.code: r for r in m.IngestRun.objects.select_related("hub")}
+    assert not runs["cores"].ok and "KeyError" in runs["cores"].error
+    assert runs["dies"].ok
+
+
+def test_mes_unreachable_mid_run_commits_nothing(mes, monkeypatch):
     p = small_plant()
     code, part = p["s1"].hub_station_code, p["part"].hub_part_code
     base = datetime(2026, 10, 5, 7, 0)
     rows = [mes_row(i, code, part, "OP1", base + timedelta(seconds=i), base + timedelta(seconds=i + 60))
             for i in range(1, BATCH_SIZE + 501)]
     mes.insert_jobs(rows)
-    calls = {"n": 0}
+    returned = []
     real_run = FixtureAdapter._run
 
     def flaky(self, query, params=()):
-        calls["n"] += 1
-        if calls["n"] == 2:  # first batch of 5,000 already upserted; the MES goes away
+        if len(returned) == 1:  # first batch of 5,000 already upserted; the MES goes away
             raise MesUnavailable("connection lost")
-        return real_run(self, query, params)
+        rows = real_run(self, query, params)
+        returned.append(len(rows))
+        return rows
 
     monkeypatch.setattr(FixtureAdapter, "_run", flaky)
-    with pytest.raises(CommandError):
-        call_command("ingest", hub="cores", verbosity=0)
-    assert calls["n"] == 2
-    assert m.Job.objects.count() == 0  # the first batch was rolled back too
+    upserted = []
+    from ingest import service
+
+    real_upsert = service._HubContext.upsert_jobs
+    monkeypatch.setattr(service._HubContext, "upsert_jobs",
+                        lambda self, rows: (upserted.append(len(rows)), real_upsert(self, rows)))
+    # A fixed now puts all rows inside the 48 h window, so the first batch really is full.
+    with pytest.raises(IngestFailed):
+        run_ingest(p["hub"], now=_now(2026, 10, 5, 12))
+    assert returned == [BATCH_SIZE] and upserted == [BATCH_SIZE]  # a full batch was written before the loss
+    assert m.Job.objects.count() == 0  # ...and rolled back with the rest of the run
     assert m.OperatorAlias.objects.count() == 0
     failed = m.IngestRun.objects.get()
     assert not failed.ok and "connection lost" in failed.error
@@ -235,7 +350,14 @@ def test_keyset_pagination_in_5000_row_batches(mes):
 def test_statement_timeout_is_set_locally_and_enforced(mes):
     p = small_plant()
     adapter = FixtureAdapter(p["hub"])
+    conn = adapter._connection()
+    default = conn.execute("SHOW statement_timeout").fetchone()[0]
+    conn.rollback()
+    assert default != "30s"
     assert adapter._run("SELECT current_setting('statement_timeout')") == [("30s",)]
+    # SET LOCAL: once the batch's transaction ends, the session is back to its default
+    assert conn.execute("SHOW statement_timeout").fetchone()[0] == default
+    conn.rollback()
     adapter.close()
     slow = FixtureAdapter(p["hub"], statement_timeout_seconds=0.2)
     with pytest.raises(MesUnavailable, match="statement timeout"):
@@ -263,6 +385,24 @@ def test_restamp_shifts_after_calendar_change(mes):
     assert m.Job.objects.get().shift == p["second"]
 
 
+def test_restamp_from_filters_on_start_long_open_job(mes):
+    """Reviewer's probe, adapted to start stamping: a job started Oct 1 and completed Oct 10
+    stays on its Oct 1 shift unless --from covers Oct 1."""
+    p = small_plant()
+    code, part = p["s1"].hub_station_code, p["part"].hub_part_code
+    mes.insert_jobs([mes_row(1, code, part, "OP1", naive(2026, 10, 1, 14, 20), naive(2026, 10, 10, 9, 0))])
+    run_ingest(p["hub"], now=_now(2026, 10, 10, 12))
+    job = m.Job.objects.get()
+    assert (job.shift, job.production_date) == (p["first"], date(2026, 10, 1))
+    m.Shift.objects.filter(pk=p["first"].pk).update(end_time=time(14))
+    m.Shift.objects.filter(pk=p["second"].pk).update(start_time=time(14))
+    call_command("restamp_shifts", hub="cores", from_date=date(2026, 10, 9), verbosity=0)
+    assert m.Job.objects.get().shift == p["first"]  # --from Oct 9 does not reach an Oct 1 start
+    call_command("restamp_shifts", hub="cores", from_date=date(2026, 10, 1), verbosity=0)
+    job = m.Job.objects.get()
+    assert (job.shift, job.production_date) == (p["second"], date(2026, 10, 1))
+
+
 def test_fixture_tick_is_noop_without_env_and_appends_with_it(mes, monkeypatch):
     end = "2026-10-12T06:00"
     call_command("seed_demo", end=end, days=2, verbosity=0)
@@ -284,8 +424,21 @@ def test_fixture_tick_requires_live_env(mes, monkeypatch):
     call_command("seed_demo", end="2026-10-12T06:00", days=1, verbosity=0)
     call_command("load_fixture_mes", end="2026-10-12T06:00", days=1, verbosity=0)
     monkeypatch.setenv("TAKT_FIXTURE_LIVE", "true")
-    call_command("fixture_tick", verbosity=0)  # up to the real now: more rows
-    assert fake_mes.execute(f"SELECT max(start_ts) FROM {fake_mes.JOB_TABLE}")[0][0] > datetime(2026, 10, 12, 6)
+    call_command("fixture_tick", now="2026-10-12T09:00", verbosity=0)  # fixed now, plant local
+    latest = fake_mes.execute(f"SELECT max(start_ts) FROM {fake_mes.JOB_TABLE}")[0][0]
+    assert datetime(2026, 10, 12, 7) < latest <= datetime(2026, 10, 12, 9)
+
+
+def test_fixture_tick_skips_hubs_not_on_the_fixture_adapter(mes, monkeypatch):
+    call_command("seed_demo", end="2026-10-12T06:00", days=1, verbosity=0)
+    call_command("load_fixture_mes", end="2026-10-12T06:00", days=1, verbosity=0)
+    m.Hub.objects.filter(code="dies").update(adapter=m.Hub.ADAPTER_DIES)
+    monkeypatch.setenv("TAKT_FIXTURE_LIVE", "true")
+    before = dict(fake_mes.execute(f"SELECT hub_code, count(*) FROM {fake_mes.JOB_TABLE} GROUP BY hub_code"))
+    call_command("fixture_tick", now="2026-10-12T09:00", verbosity=0)
+    after = dict(fake_mes.execute(f"SELECT hub_code, count(*) FROM {fake_mes.JOB_TABLE} GROUP BY hub_code"))
+    assert after["cores"] > before["cores"]
+    assert after["dies"] == before["dies"]
 
 
 def test_fixture_generator_is_deterministic_and_realistic(mes):

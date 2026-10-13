@@ -372,7 +372,9 @@ class IngestRun(models.Model):
 
     INCREMENTAL = "incremental"
     NIGHTLY = "nightly"
-    MODE_CHOICES = [(INCREMENTAL, "Incremental (48 h)"), (NIGHTLY, "Nightly (7 days)")]
+    BACKFILL = "backfill"
+    MODE_CHOICES = [(INCREMENTAL, "Incremental (48 h)"), (NIGHTLY, "Nightly (7 days)"),
+                    (BACKFILL, "Backfill (ingest --days N)")]
 
     hub = models.ForeignKey(Hub, on_delete=models.CASCADE, related_name="ingest_runs")
     mode = models.CharField(max_length=12, choices=MODE_CHOICES)
@@ -382,6 +384,7 @@ class IngestRun(models.Model):
     rows_read = models.PositiveIntegerField(default=0)
     rows_changed = models.PositiveIntegerField(default=0)
     open_jobs_reread = models.PositiveIntegerField(default=0)
+    lookback_hours = models.FloatField(null=True, blank=True, help_text="How far back this run re-read.")
     query_seconds = models.FloatField(default=0)
     # Rows with a station or part code Takt does not know: logged and counted, never silently dropped.
     rows_skipped = models.PositiveIntegerField(default=0)
