@@ -9,3 +9,6 @@ urlpatterns = [
     path("", include("ops.urls")),
     path("", include("web.urls")),
 ]
+
+# D13: a DB-down error raised outside a view still gets the plain 503 page.
+handler500 = "ops.views.server_error"
