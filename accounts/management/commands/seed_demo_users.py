@@ -12,7 +12,8 @@ Works with whatever Areas and Shifts exist:
   admin, including operators and aliases for mapping; no jobs, scrap or disputes)
 
 Password: $TAKT_DEMO_PASSWORD, or a printed dev-only default. Existing users keep
-their password unless --reset-passwords is given.
+their password unless --reset-passwords is given, except a user with no usable password
+(e.g. "builder" created by seed_demo), which gets the demo password so it can log in.
 """
 
 import os
@@ -87,7 +88,7 @@ class Command(BaseCommand):
         user, created = User.objects.get_or_create(username=username)
         user.is_superuser = superuser
         user.is_staff = superuser or staff
-        if created or self.reset:
+        if created or self.reset or not user.has_usable_password():  # e.g. builder made by seed_demo
             user.set_password(self.password)
         user.save()
         if role:
