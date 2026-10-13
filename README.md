@@ -39,9 +39,11 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm web pyt
 | `503`, `"status": "stale"` | At least one hub has had **no new MES transaction for 30 minutes during a scheduled shift** (from the shift calendar). Check the scheduler container's logs (`docker compose logs scheduler`), the MES connection, and the hub's latest Ingest run in the admin. |
 | `503`, `"status": "error"` | Takt can't reach its own Postgres database. Users see a plain "Takt can't reach its database" page. Check the `postgres` container. |
 
-Quiet time is counted from the later of the hub's last new transaction and the current shift's start,
-so a shift that has just started is not stale until 30 minutes in. A hub that has never ingested is
-stale during any scheduled shift. The 30 minutes is `stale_after_minutes` in Site settings (admin).
+Quiet time is counted from the later of the hub's last new transaction and the start of the current
+block of back-to-back scheduled shifts. A shift change does not reset the clock (with 7-15 and 15-23
+shifts, a hub quiet since 14:20 is stale at 15:05), but the first shift after a gap or a non-working
+day is not stale until 30 minutes in. A hub that has never sent a transaction follows the same rule:
+stale 30 minutes after its block starts. The 30 minutes is `stale_after_minutes` in Site settings (admin).
 Users see the same rule as a stale banner under the nav and a "STALE" line on printed sheets.
 
 Response body:
