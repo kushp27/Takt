@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils import timezone
 
 from . import models
 
@@ -114,6 +115,22 @@ class IngestRunAdmin(admin.ModelAdmin):
 
 @admin.register(models.SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
+    # Gate 1 (HR sign-off) is flipped only by the builder (superuser); the plant admin
+    # group keeps the thresholds. Who and when are stamped, never typed.
+    GATE1_STAMPS = ["gate1_approved_by", "gate1_approved_at"]
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = [*super().get_readonly_fields(request, obj), *self.GATE1_STAMPS]
+        if not request.user.is_superuser:
+            fields.append("gate1_approved")
+        return fields
+
+    def save_model(self, request, obj, form, change):
+        if "gate1_approved" in form.changed_data:
+            obj.gate1_approved_by = request.user.get_username()
+            obj.gate1_approved_at = timezone.now()
+        super().save_model(request, obj, form, change)
+
     def has_add_permission(self, request):
         return not models.SiteSettings.objects.exists()
 
