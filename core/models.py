@@ -383,6 +383,9 @@ class IngestRun(models.Model):
     rows_changed = models.PositiveIntegerField(default=0)
     open_jobs_reread = models.PositiveIntegerField(default=0)
     query_seconds = models.FloatField(default=0)
+    # Rows with a station or part code Takt does not know: logged and counted, never silently dropped.
+    rows_skipped = models.PositiveIntegerField(default=0)
+    skipped_detail = models.TextField(blank=True, help_text="Unknown codes and how many rows each skipped.")
     error = models.TextField(blank=True)
 
     class Meta:

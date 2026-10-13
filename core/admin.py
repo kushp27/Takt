@@ -108,7 +108,7 @@ class StationPartGradeAdmin(admin.ModelAdmin):
 
 @admin.register(models.IngestRun)
 class IngestRunAdmin(admin.ModelAdmin):
-    list_display = ["hub", "mode", "started_at", "ok", "rows_read", "rows_changed", "open_jobs_reread", "query_seconds"]
+    list_display = ["hub", "mode", "started_at", "ok", "rows_read", "rows_changed", "open_jobs_reread", "rows_skipped", "query_seconds"]
     list_filter = ["hub", "mode", "ok"]
 
 
