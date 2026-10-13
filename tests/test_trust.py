@@ -40,15 +40,20 @@ def test_under_four_weeks_is_not_graded():
     assert grade_from_shares(0, 0, 0, days_of_history=28) == "green"
 
 
-def test_days_of_history_ignores_runs_before_a_gap_over_a_week():
-    # March DST slice, then a run from Oct 4: only the current run counts.
-    dates = [date(2026, 10, d) for d in (10, 9, 8, 6, 5, 4)] + [date(2026, 3, 7), date(2026, 3, 6)]
-    assert days_of_history(dates, AS_OF) == 9
-    # exactly 7 days apart still joins the run; 8 breaks it
-    assert days_of_history([date(2026, 10, 12), date(2026, 10, 5)], AS_OF) == 8
-    assert days_of_history([date(2026, 10, 12), date(2026, 10, 4)], AS_OF) == 1
-    # last job more than a week before as_of: no current history
-    assert days_of_history([date(2026, 10, 1)], AS_OF) == 0
+def test_days_of_history_counts_from_the_first_job():
+    assert days_of_history(date(2026, 10, 4), AS_OF) == 9
+    assert days_of_history(date(2026, 9, 15), AS_OF) == 28
+    assert days_of_history(None, AS_OF) == 0
+
+
+def test_history_looks_back_eight_weeks_only(graded_plant):
+    """A part that ran 50 days ago and again recently has 50 days of history (no gap rule); the
+    March DST slice, outside the 8-week look-back, does not count (Sort/B has 9 days)."""
+    p = graded_plant
+    g.job(p["s1"], p["part"], p["ops"]["a"], _at(p["hub"], AS_OF - timedelta(days=49), 8))
+    res = _by_key(compute_grades(as_of=f.local(p["hub"], 2026, 10, 12, 23, 59)))
+    assert res[("Injection 3", p["part"].pk)].days_of_history == 50
+    assert res[("Sort", p["part_b"].pk)].days_of_history == 9
 
 
 def test_majority_grade_by_volume_ties_go_cautious():
@@ -114,7 +119,7 @@ def test_trust_grade_golden_numbers(graded_plant):
     r = res[("Injection 3", b)]
     assert (r.grade, r.d_share, r.c_share, r.o_share, r.job_count) == ("red", 0.0, 0.0, 0.30, 20)
 
-    r = res[("Sort", b)]  # the March job is outside the 4-week window
+    r = res[("Sort", b)]  # the March job is outside the 4-week window and the 8-week look-back
     assert (r.grade, r.job_count, r.days_of_history) == ("not_graded", 9, 9)
     assert badge(r.grade, r.days_of_history).detail == "Not graded yet (needs 4 weeks; 9 days so far)"
 
@@ -243,3 +248,36 @@ def test_matrix_batch_station_is_red_column_and_missing_grade_is_not_graded():
     assert UNVERIFIED_MESSAGE == "Counts unverified, keep tally."
     assert cell("amber", False).grade_badge.text == "Counts only #"
     assert cell("green", True).as_dict()["badge"]["text"] == "Verified ✓"
+
+
+# ---------------------------------------------------------------- start-time stamping (user decision)
+
+
+def test_c_share_uses_the_shift_that_contains_the_completion():
+    """A job started in 1st and closed in the last 20 minutes of 2nd is stamped 1st (start time)
+    but counts for C at 2nd's end: C = 1/20."""
+    p = small_plant()
+    hub, op = p["hub"], f.alias(f.operator(), p["hub"])
+    for i, d in enumerate(GRADE_DATES):
+        g.job(p["s2"], p["part"], op, _at(hub, d, 8))
+        if i == 4:
+            late = g.job(p["s2"], p["part"], op, _at(hub, d, 14), complete=_at(hub, d, 22, 45))
+        else:
+            g.job(p["s2"], p["part"], op, _at(hub, d, 10))
+    assert late.shift == p["first"]
+    [r] = compute_grades(as_of=f.local(hub, 2026, 10, 12, 23, 59))
+    assert (r.c_share, r.d_share, r.o_share) == (0.05, 0.05, 0.0)
+
+
+def test_batch_station_jobs_do_not_count_as_overlaps_at_flow_stations():
+    p = small_plant()
+    hub = p["hub"]
+    kiln = f.station(p["line"], 3, "Kiln", station_type=m.Station.BATCH)
+    op = f.alias(f.operator(), hub)
+    for d in GRADE_DATES:
+        g.job(kiln, p["part"], op, _at(hub, d, 8), minutes=140)  # the load fires while they work
+        g.job(p["s1"], p["part"], op, _at(hub, d, 8, 30))
+        g.job(p["s1"], p["part"], op, _at(hub, d, 9))
+    res = _by_key(compute_grades(as_of=f.local(hub, 2026, 10, 12, 23, 59)))
+    assert res[("Injection 3", p["part"].pk)].o_share == 0.0
+    assert res[("Injection 3", p["part"].pk)].grade == "green"

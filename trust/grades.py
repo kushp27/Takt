@@ -9,6 +9,7 @@ For each station-and-part over the trailing window (4 weeks), three shares of co
 
 Green: D, C and O each under 10%. Red: any over 25%, or the station is batch. Amber: the rest.
 Under 4 weeks of history: "not graded yet" (design review D11), which displays like amber.
+Only the trailing window's jobs are graded; history counts from the first job in the last 8 weeks.
 Thresholds are SiteSettings (admin).
 """
 
@@ -21,13 +22,37 @@ from django.utils import timezone as djtz
 from core.models import Station, StationPartGrade, SiteSettings
 from core.shifts import local_date
 
-# A gap between consecutive production dates longer than this restarts a station-part's history:
-# a short run months ago (e.g. the March DST slice in the demo) does not make it "4 weeks old".
-HISTORY_GAP_DAYS = 7
+# History (design review D11, "needs 4 weeks"): days since the station-part's first job, looking
+# back at most this many grade windows. The doc defines no gap rule; bounding the look-back keeps
+# an old run (the demo's March DST slice) from making a part look 4 weeks old when it has only
+# just started again, while any part that has run within the last 8 weeks counts in full.
+HISTORY_LOOKBACK_WINDOWS = 2
+# Window functions (clustered completions, overlaps) see the graded dates plus this pad, so a job
+# on the first or last graded day is compared with its neighbours on adjacent days.
+PAD_DAYS = 1
 
 GRADE_SQL = """
-WITH w AS (
-    SELECT * FROM trust_job_quality
+WITH base AS (
+    SELECT q.*,
+           COALESCE('o' || q.operator_id::text, 'a' || q.alias_id::text)
+             || CASE WHEN q.station_type = 'batch' THEN ':batch' ELSE ':flow' END AS person
+    FROM trust_job_quality q
+    WHERE q.production_date BETWEEN %(pad_from)s AND %(pad_to)s
+), win AS (
+    -- O: overlap with another job by the same person. Batch-station jobs (a kiln load runs for
+    -- hours while the loader works elsewhere) are compared only with other batch jobs.
+    SELECT b.*,
+           (count(*) OVER (PARTITION BY b.station_id, b.completed_at)) - 1 AS same_complete_others,
+           (count(*) OVER (PARTITION BY b.station_id, b.started_at, b.completed_at)) - 1
+               AS same_start_complete_others,
+           COALESCE(b.started_at < max(b.completed_at) OVER w_prev, false)
+             OR COALESCE(lead(b.started_at) OVER w_next < b.completed_at, false) AS overlaps
+    FROM base b
+    WINDOW w_prev AS (PARTITION BY b.person ORDER BY b.started_at, b.job_id
+                      ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),
+           w_next AS (PARTITION BY b.person ORDER BY b.started_at, b.job_id)
+), w AS (
+    SELECT * FROM win
     WHERE station_id = ANY(%(stations)s) AND production_date BETWEEN %(date_from)s AND %(date_to)s
 ), med AS (
     SELECT station_id, part_id, percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_s) AS median_s
@@ -36,9 +61,10 @@ WITH w AS (
 SELECT w.station_id, w.part_id, count(*) AS n, COALESCE(sum(w.quantity), 0) AS volume,
        avg(CASE WHEN w.duration_s < %(short)s * m.median_s OR w.duration_s > %(long)s * m.median_s
                 THEN 1 ELSE 0 END)::float8 AS d_share,
-       avg(CASE WHEN (w.shift_end IS NOT NULL
-                      AND w.completed_at >= w.shift_end - make_interval(mins => %(eos)s)
-                      AND w.completed_at <= w.shift_end)
+       -- C: completed in the last N minutes of the scheduled shift that CONTAINS the completion
+       -- (not the stamped start shift), or an identical completion shared with 3+ other jobs.
+       avg(CASE WHEN (w.completed_window_end IS NOT NULL
+                      AND w.completed_at >= w.completed_window_end - make_interval(mins => %(eos)s))
                   OR w.same_complete_others >= %(cluster)s
                 THEN 1 ELSE 0 END)::float8 AS c_share,
        avg(CASE WHEN w.overlaps THEN 1 ELSE 0 END)::float8 AS o_share,
@@ -47,10 +73,10 @@ FROM w JOIN med m ON m.station_id = w.station_id AND m.part_id = w.part_id
 GROUP BY w.station_id, w.part_id
 """
 
-DATES_SQL = """
-SELECT DISTINCT station_id, part_id, production_date FROM metrics_job_fact
-WHERE station_id = ANY(%(stations)s) AND production_date <= %(date_to)s
-ORDER BY station_id, part_id, production_date DESC
+FIRST_JOB_SQL = """
+SELECT station_id, part_id, min(production_date) FROM metrics_job_fact
+WHERE station_id = ANY(%(stations)s) AND production_date BETWEEN %(since)s AND %(date_to)s
+GROUP BY station_id, part_id
 """
 
 
@@ -83,18 +109,11 @@ def grade_from_shares(d, c, o, *, batch=False, days_of_history=None, settings=No
     return StationPartGrade.AMBER
 
 
-def days_of_history(dates_desc, as_of_date, gap_days=HISTORY_GAP_DAYS):
-    """Calendar days from the start of the current contiguous run of production dates to as_of
-    (inclusive). A gap longer than `gap_days` (including from the latest job to as_of) ends the run."""
-    prev = as_of_date
-    start = None
-    for d in dates_desc:
-        if d > as_of_date:
-            continue
-        if (prev - d).days > gap_days:
-            break
-        start, prev = d, d
-    return 0 if start is None else (as_of_date - start).days + 1
+def days_of_history(first_job_date, as_of_date):
+    """Calendar days from the station-part's first job (within the look-back) to as_of, inclusive."""
+    if first_job_date is None or first_job_date > as_of_date:
+        return 0
+    return (as_of_date - first_job_date).days + 1
 
 
 def _as_of_date(station, as_of):
@@ -118,18 +137,21 @@ def compute_grades(stations=None, as_of=None, window_days=None, settings=None):
         for as_of_d, group in by_date.items():
             ids = [st.pk for st in group]
             st_by_id = {st.pk: st for st in group}
-            cur.execute(DATES_SQL, {"stations": ids, "date_to": as_of_d})
-            hist = {}
-            for sid, pid, d in cur.fetchall():
-                hist.setdefault((sid, pid), []).append(d)
+            cur.execute(FIRST_JOB_SQL, {
+                "stations": ids, "date_to": as_of_d,
+                "since": as_of_d - timedelta(days=HISTORY_LOOKBACK_WINDOWS * window_days - 1),
+            })
+            first = {(sid, pid): d for sid, pid, d in cur.fetchall()}
+            date_from = as_of_d - timedelta(days=window_days - 1)
             cur.execute(GRADE_SQL, {
-                "stations": ids, "date_from": as_of_d - timedelta(days=window_days - 1), "date_to": as_of_d,
+                "stations": ids, "date_from": date_from, "date_to": as_of_d,
+                "pad_from": date_from - timedelta(days=PAD_DAYS), "pad_to": as_of_d + timedelta(days=PAD_DAYS),
                 "short": s.duration_short_ratio, "long": s.duration_long_ratio,
                 "eos": s.end_of_shift_minutes, "cluster": s.clustered_timestamp_others,
             })
             for sid, pid, n, volume, d_share, c_share, o_share, batch_share in cur.fetchall():
                 st = st_by_id[sid]
-                days = days_of_history(hist.get((sid, pid), []), as_of_d)
+                days = days_of_history(first.get((sid, pid)), as_of_d)
                 grade = grade_from_shares(d_share, c_share, o_share, batch=st.station_type == Station.BATCH,
                                           days_of_history=days, settings=s)
                 out.append(GradeResult(st, pid, grade, d_share, c_share, o_share, n, int(volume), days, batch_share))
@@ -174,4 +196,4 @@ def majority_grade(volume_by_grade):
 
 
 __all__ = ["compute_grades", "save_grades", "grade_from_shares", "days_of_history", "majority_grade",
-           "GradeResult", "HISTORY_GAP_DAYS"]
+           "GradeResult", "HISTORY_LOOKBACK_WINDOWS", "PAD_DAYS"]
