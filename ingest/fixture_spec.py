@@ -6,8 +6,10 @@ Dies Hub (Open Question 1). Codes are invented and deliberately look invented.
 
 Behaviours drive the trust grade (Component 4) so the demo shows every grade:
 - "clean"        -> green
-- "eos_close"    -> jobs batch-closed at shift end (C share, and O: a forgotten job overlaps the
-                    operator's later jobs); amber at 1.5% of jobs, red at 40%
+- "eos_close"    -> a job left open and batch-closed at shift end. The close lands in the C share,
+                    but the grade is driven by O: the forgotten job overlaps every later job by
+                    that operator. Deburr (1.5% of jobs forgotten) grades amber on O (~18-21%,
+                    with C ~5% and D ~4%); Leach (40%) grades red on all three.
 - "overlap"      -> operator runs two jobs at once (O share); amber
 - batch station  -> red by definition (the kiln), identical start/complete timestamps
 - part C-4473 is introduced 12 days before the data end -> "not graded yet"
