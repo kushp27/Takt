@@ -25,6 +25,30 @@
     {% block content %}{% endblock %}
   </main>
   <div id="live-region" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+  <script>
+  /* D13 htmx states. A 403 fragment ("This area isn't in your assignment") is swapped in
+     like a normal response. Any other failure shows the inline error with Retry; elements
+     can set data-load-error, default "Couldn't load stations." (design review D13). */
+  document.addEventListener("htmx:beforeSwap", function (e) {
+    if (e.detail.xhr && e.detail.xhr.status === 403) { e.detail.shouldSwap = true; e.detail.isError = false; }
+  });
+  function taktLoadError(e) {
+    var elt = e.detail.elt, target = e.detail.target || elt;
+    if (!target || (e.detail.xhr && e.detail.xhr.status === 403)) return;
+    var p = document.createElement("p"), retry = document.createElement("button");
+    p.className = "inline-error"; p.setAttribute("role", "alert");
+    p.textContent = (elt.getAttribute("data-load-error") || "Couldn't load stations.") + " ";
+    retry.type = "button"; retry.textContent = "Retry";
+    var cfg = e.detail.requestConfig || {};
+    retry.addEventListener("click", function () {
+      htmx.ajax((cfg.verb || "get").toUpperCase(), cfg.path, {source: elt, target: target});
+    });
+    p.appendChild(retry);
+    target.replaceChildren(p);
+  }
+  document.addEventListener("htmx:responseError", taktLoadError);
+  document.addEventListener("htmx:sendError", taktLoadError);
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

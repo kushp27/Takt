@@ -85,12 +85,3 @@ def page_hx_vals(context):
     if page is None:
         return ""
     return format_html('hx-vals="{}"', page.hx_vals)
-
-
-@register.simple_tag(takes_context=True)
-def page_token_input(context):
-    """A hidden input with the page token, for non-htmx forms that post back to a partial."""
-    page = context.get("takt_page")
-    if page is None:
-        return ""
-    return format_html('<input type="hidden" name="{}" value="{}">', policy.TOKEN_PARAM, page.token)

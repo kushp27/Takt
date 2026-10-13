@@ -14,14 +14,17 @@ For class-based views wrap the callable in urls.py: operator_bearing(MyView.as_v
 from functools import wraps
 
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponse
+from django.shortcuts import render
 
 from core.models import Area, Shift
 
 from . import scope
 from .models import Profile
+from .policy import PageTokenRejected
 
 OUT_OF_SCOPE_TEMPLATE = "web/out_of_scope.html"
+OUT_OF_SCOPE_INLINE_TEMPLATE = "partials/out_of_scope_inline.html"
 
 # The attribute the identity sweep (tests/test_identity_sweep.py) looks for on every
 # resolved URL callback. functools.wraps copies it through stacked decorators.
@@ -29,14 +32,23 @@ OPERATOR_BEARING_ATTR = "takt_operator_bearing"
 
 
 def render_out_of_scope(request, reason="area"):
-    """The D13 page with status 403. reason: 'area' | 'shift' | 'role'."""
+    """The D13 page with status 403. reason: 'area' | 'shift' | 'role'.
+
+    For an htmx request it is a small inline fragment (still 403) that base.html swaps in.
+    """
     is_admin = scope.role_of(request.user) == Profile.ADMIN
+    template = OUT_OF_SCOPE_INLINE_TEMPLATE if request.headers.get("HX-Request") == "true" else OUT_OF_SCOPE_TEMPLATE
     return render(
         request,
-        OUT_OF_SCOPE_TEMPLATE,
+        template,
         {"reason": reason, "is_admin_role": is_admin, "own_area_url": scope.own_area_url(request.user)},
         status=403,
     )
+
+
+def hx_refresh():
+    """Tell htmx to reload the whole page (which mints a new page token)."""
+    return HttpResponse(status=200, headers={"HX-Refresh": "true"})
 
 
 def role_required(*roles):
@@ -63,6 +75,8 @@ def operator_bearing(view):
 
     - anonymous: redirect to login;
     - admin and profile-less users: D13 page, 403 (admins never see operator metrics);
+    - an htmx request without a usable page token in letter mode (PageTokenRejected from
+      page_context) gets HX-Refresh instead of fresh letters (eng re-review D3);
     - registers the view for the identity sweep, which fails if a marked URL has no
       sweep case (or an unmarked URL renders an operator name).
     """
@@ -72,7 +86,10 @@ def operator_bearing(view):
     def wrapped(request, *args, **kwargs):
         if not scope.can_see_operator_metrics(request.user):
             return render_out_of_scope(request, reason="role")
-        return view(request, *args, **kwargs)
+        try:
+            return view(request, *args, **kwargs)
+        except PageTokenRejected:
+            return hx_refresh()
 
     setattr(wrapped, OPERATOR_BEARING_ATTR, True)
     return wrapped
@@ -91,8 +108,9 @@ def area_scope_required(area_param="area_id", shift_param=None):
     """403 with the D13 page unless the user can view the area (and the shift, if given).
 
     Looks the parameter up in the URL kwargs, then GET, then POST. A missing area is
-    out of scope (conservative). A missing shift is allowed for supervisors and up,
-    but a lead must name their own shift whenever shift_param is set.
+    out of scope (conservative), and so is an unknown id: it gets the same D13 403 as an
+    area the user can't see, so ids can't be probed. A missing shift is allowed for
+    supervisors and up, but a lead must name their own shift whenever shift_param is set.
     """
 
     def decorator(view):
@@ -102,8 +120,8 @@ def area_scope_required(area_param="area_id", shift_param=None):
             area_id = _lookup(request, kwargs, area_param)
             if not str(area_id or "").isdigit():
                 return render_out_of_scope(request, reason="area")
-            area = get_object_or_404(Area, pk=int(area_id))
-            if not scope.can_view_area(request.user, area):
+            area = Area.objects.filter(pk=int(area_id)).first()
+            if area is None or not scope.can_view_area(request.user, area):
                 return render_out_of_scope(request, reason="area")
             if shift_param:
                 shift_id = _lookup(request, kwargs, shift_param)
@@ -113,8 +131,8 @@ def area_scope_required(area_param="area_id", shift_param=None):
                 elif not str(shift_id).isdigit():
                     return render_out_of_scope(request, reason="shift")
                 else:
-                    shift = get_object_or_404(Shift, pk=int(shift_id))
-                    if not scope.can_view_shift(request.user, area, shift):
+                    shift = Shift.objects.filter(pk=int(shift_id)).first()
+                    if shift is None or not scope.can_view_shift(request.user, area, shift):
                         return render_out_of_scope(request, reason="shift")
             return view(request, *args, **kwargs)
 

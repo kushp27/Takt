@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import timedelta
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
@@ -20,11 +21,10 @@ def w():
     return build_world()
 
 
-def ctx_for(w, role, scope=None, htmx_token=None):
-    req = rf.get("/", {policy.TOKEN_PARAM: htmx_token} if htmx_token else {},
-                 headers={"HX-Request": "true"} if htmx_token else {})
+def ctx_for(w, role, scope=None):
+    req = rf.get("/")
     req.user = w.users[role] or AnonymousUser()
-    return page_context(req, scope or OperatorScope(area_ids=[w.area_in.pk]))
+    return page_context(req, scope or OperatorScope(area_ids=[w.area_in.pk], date_from=w.today, date_to=w.today))
 
 
 def show(w, role, key, ctx=None):
@@ -63,14 +63,14 @@ def test_out_of_scope_hidden_never_lettered(w, gate1):
     d = show(w, "lead_own", "pem")
     assert d.mode == HIDDEN and d.letter is None and "Pemberly" not in d.label
     # Supervisor of North can't see a South operator, even by asking for South in the scope.
-    ctx = ctx_for(w, "sup_in", OperatorScope(area_ids=[w.area_in.pk, w.area_out.pk]))
+    ctx = ctx_for(w, "sup_in", OperatorScope(area_ids=[w.area_in.pk, w.area_out.pk], date_from=w.today, date_to=w.today))
     assert show(w, "sup_in", "mar", ctx).mode == HIDDEN
     # The letters only cover what the user may see.
     assert len(ctx.letters) == 4  # zeb, ott, pem, hub
 
 
 def test_operator_outside_page_scope_hidden_even_for_builder(w):
-    ctx = ctx_for(w, "builder", OperatorScope(area_ids=[w.area_in.pk]))
+    ctx = ctx_for(w, "builder", OperatorScope(area_ids=[w.area_in.pk], date_from=w.today, date_to=w.today))
     assert show(w, "builder", "mar", ctx).mode == HIDDEN
 
 
@@ -121,7 +121,7 @@ def test_sorted_drops_hidden_rows(w):
 def render(w, role, src, **extra):
     req = rf.get("/")
     req.user = w.users[role] or AnonymousUser()
-    ctx = page_context(req, OperatorScope(area_ids=[w.area_in.pk]))
+    ctx = page_context(req, OperatorScope(area_ids=[w.area_in.pk], date_from=w.today, date_to=w.today))
     tpl = engines["django"].from_string("{% load operator %}" + src)
     return tpl.render({"takt_page": ctx, **extra}, req), ctx
 
@@ -171,9 +171,18 @@ def test_gate1_notice_tag(w):
     assert policy.GATE1_NOTICE not in out
 
 
-def test_page_hx_vals_and_token_input(w):
-    out, ctx = render(w, "ops_manager", "<div {% page_hx_vals %}></div>{% page_token_input %}")
+def test_page_hx_vals(w):
+    out, ctx = render(w, "ops_manager", "<div {% page_hx_vals %}></div>")
     m = re.search(r'hx-vals="([^"]+)"', out)
     vals = json.loads(m.group(1).replace("&quot;", '"'))
     assert vals == {policy.TOKEN_PARAM: ctx.token}
-    assert f'name="{policy.TOKEN_PARAM}" value="{ctx.token}"' in out
+
+
+def test_page_context_requires_bounded_dates(w):
+    req = rf.get("/")
+    req.user = w.users["ops_manager"]
+    for bad in (OperatorScope(area_ids=[w.area_in.pk]),
+                OperatorScope(area_ids=[w.area_in.pk], date_from=w.today),
+                OperatorScope(date_from=w.today, date_to=w.today - timedelta(days=1))):
+        with pytest.raises(ValueError):
+            page_context(req, bad)

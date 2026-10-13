@@ -168,3 +168,27 @@ def test_role_required(w):
     assert _sup_view(_req(w.users["builder"])).status_code == 200
     assert _sup_view(_req(w.users["lead_own"])).status_code == 403
     assert _sup_view(_req(w.users["admin"])).status_code == 403
+
+
+def test_unknown_area_or_shift_is_the_same_d13_403(w):
+    resp = _shift_view(_req(w.users["sup_in"]), area_id=999999)
+    assert resp.status_code == 403 and b"This area isn't in your assignment" in resp.content
+    resp = _shift_view(_req(w.users["sup_in"]), area_id=w.area_in.pk, shift_id=999999)
+    assert resp.status_code == 403
+
+
+def test_htmx_refusal_is_an_inline_d13_fragment(w):
+    r = rf.get("/x/", headers={"HX-Request": "true"})
+    r.user = w.users["sup_out"]
+    resp = _shift_view(r, area_id=w.area_in.pk)
+    assert resp.status_code == 403
+    body = resp.content.decode()
+    assert "This area isn't in your assignment" in body and "Back to your area" in body
+    assert "<html" not in body and 'role="alert"' in body
+
+
+def test_base_template_swaps_403_fragments_and_shows_load_errors(client, w):
+    client.force_login(w.users["sup_in"])
+    body = client.get("/").content.decode()
+    assert "htmx:beforeSwap" in body and "status === 403" in body
+    assert "htmx:responseError" in body and "Couldn't load stations." in body and "Retry" in body

@@ -1,0 +1,2 @@
+{% comment %}Design review D13, inline for htmx requests (status 403; base.html swaps it in).{% endcomment %}
+<p class="inline-error" role="alert">This area isn't in your assignment. {% if is_admin_role %}The admin role covers configuration only. <a href="{{ own_area_url }}">Go to configuration</a>{% else %}<a href="{{ own_area_url }}">Back to your area</a>{% endif %}</p>

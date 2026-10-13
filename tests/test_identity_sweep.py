@@ -4,29 +4,36 @@ What it asserts, against fixture operators with distinctive names (tests/identit
 - names appear only when the policy allows: builder always; ops manager, supervisor and
   lead only after Gate 1 and only for operators in their scope;
 - before Gate 1 those roles see letters ("Operator C", "Unmapped operator D") instead,
-  one distinct letter per visible operator, plus the D12 notice on full pages;
+  one distinct letter per visible operator, dense on full pages (A, B, C...), in
+  ascending order within every table or list (so rows never follow name order), plus
+  the D12 notice on full pages;
+- in letter mode no model str() form leaks ("Operator #12", "cores:ZQ-101");
 - operators outside the user's scope are never named, never lettered;
 - an unmapped alias's hub ID shows only in named mode ("Unmapped operator (HUBQX-77)");
-- out of scope -> 403 with the D13 page; admin -> 403 everywhere (never operator metrics);
-  anonymous -> redirect to login;
+- out of scope -> 403 with the D13 copy (page, or inline fragment for htmx); admin -> 403
+  everywhere (never operator metrics); anonymous -> redirect to login;
 - no view passes a raw operator name into the template context (any mode, any role);
 - partials are swept three ways: with the parent page's token, with no token, and with
-  a forged token. None may leak.
+  a forged token. None may leak; in letter mode the last two must answer HX-Refresh.
 
 The URL list can't rot:
 - test_every_operator_bearing_url_has_a_sweep_case walks every resolver pattern and fails
   if a view marked @operator_bearing has no SweepCase (or a SweepCase names a URL that
   isn't marked);
-- test_unmarked_urls_render_no_operator_identity requests every UNMARKED pattern as the
-  builder with Gate 1 on (where names are most visible) and fails if a fixture name or
-  hub ID appears: that view renders operators and must be marked and registered.
+- test_unmarked_urls_render_no_operator_identity requests every UNMARKED pattern as every
+  role, Gate 1 off and on, plain and htmx, with and without common query params
+  (area_id, shift_id, station_id, line_id, date + DISCOVERY_KWARGS), and fails if a
+  fixture name, hub ID or model str() form appears: that view renders operators and must
+  be marked and registered.
 
 HOW LANE D ADDS A URL TO THE SWEEP
 1. Decorate the view with @operator_bearing (accounts.decorators). For a class-based
    view wrap the callable in urls.py: path(..., operator_bearing(MyView.as_view()), name=...).
    Add the scope decorator too (area_scope_required("area_id", shift_param="shift_id")).
-2. In the view, build ctx = page_context(request, OperatorScope(...)) and pass it to the
-   template as `takt_page`; render operators only with {% operator %} and friends.
+2. In the view, build ctx = page_context(request, OperatorScope(..., date_from=d, date_to=d))
+   (partials add parents=("<page view name>",)) and pass it to the template as `takt_page`;
+   render operators only with {% operator %} and friends, in ctx.sorted()/{% operators_sorted %}
+   order (never queryset order: Operator.Meta.ordering is by name).
 3. Add a SweepCase to SWEEP_CASES in tests/sweep_registry.py:
        SweepCase("web:my_shift",
                  kwargs=lambda w: {"area_id": w.area_in.pk, "shift_id": w.shift_1st.pk},
@@ -40,7 +47,8 @@ HOW LANE D ADDS A URL TO THE SWEEP
      (e.g. a drill-down for one station: lambda w: w.in_scope(station="st_a1"));
    - partial=True for htmx partials; parent="<case id>" makes the sweep reuse that page's
      token (taken from its {% page_hx_vals %} attribute), and also tries no/forged tokens;
-   - method="post" + data=... for POST partials (e.g. the dispute job list).
+   - method="post" + data=... for POST partials (e.g. the dispute job list);
+   - lead_may_refuse=True only for a shift-less URL that deliberately 403s leads.
    If the screen needs rows the World doesn't have, extend build_world() (keep names unusual).
 4. Run the suite. Nothing else to edit: the matrix of roles and Gate 1 states is automatic.
 """
@@ -53,7 +61,7 @@ from django.test import Client
 from django.urls import URLResolver, get_resolver, reverse
 
 from accounts.decorators import OPERATOR_BEARING_ATTR
-from accounts.policy import GATE1_NOTICE, TOKEN_PARAM
+from accounts.policy import GATE1_NOTICE, TOKEN_PARAM, _letters
 from tests.identity_world import ROLES, World, build_world, set_gate1
 from tests.sweep_registry import (
     DISCOVERY_KWARGS,
@@ -68,6 +76,7 @@ D13_TEXT = "This area isn't in your assignment"
 LETTER_RE = re.compile(r"\b(Unmapped operator|Operator) ([A-Z]{1,3})\b")
 TOKEN_RE = re.compile(r"hx-vals=\"\{&quot;" + TOKEN_PARAM + r"&quot;: &quot;([^&]+)&quot;\}\"")
 FORGED_TOKEN = "eyJuIjoiZm9yZ2VkIn0:forged:signature"
+BLOCK_RE = re.compile(r"<(table|ul|ol)\b.*?</\1>", re.DOTALL | re.IGNORECASE)
 
 CASES_BY_ID = {c.id: c for c in SWEEP_CASES}
 
@@ -122,12 +131,30 @@ def context_strings(resp):
             yield from _strings(value)
 
 
+def expected_status(world, case, role):
+    """'login' | '403' | '200' | '200-or-403' from the oracle in tests/identity_world.py."""
+    if role == "anonymous":
+        return "login"
+    if role == "admin":
+        return "403"
+    if not World.role_area_ok(role, case.area) or (case.shift and not World.role_shift_ok(role, case.shift)):
+        return "403"
+    if case.lead_may_refuse and case.shift is None and role.startswith("lead"):
+        return "200-or-403"
+    return "200"
+
+
+def letter_key(letter):
+    return (len(letter), letter)
+
+
 def check(world, case, role, gate1, resp, how=""):
     """All policy violations in one response, as readable strings."""
     tag = f"[{case.id} {how} role={role} gate1={'on' if gate1 else 'off'}]"
     errs = []
     body = resp.content.decode(errors="replace") if not resp.streaming else ""
     names = world.names
+    mode = World.mode(role, gate1)
 
     for s in context_strings(resp):
         for k, n in names.items():
@@ -135,26 +162,35 @@ def check(world, case, role, gate1, resp, how=""):
                 errs.append(f"{tag} raw operator name {n!r} passed into the template context")
 
     # ---- status oracle
-    if role == "anonymous":
+    expect = expected_status(world, case, role)
+    refresh = resp.get("HX-Refresh") == "true"
+    # A partial without a usable page token must not mint fresh letters (D3 failure mode).
+    expect_refresh = (case.partial and mode == "letter" and how in ("no-token", "forged-token")
+                      and expect in ("200", "200-or-403"))
+    if expect_refresh:
+        if not refresh:
+            errs.append(f"{tag} letter mode without a usable page token must answer HX-Refresh, "
+                        f"got {resp.status_code}")
+        if LETTER_RE.search(body) or any(n in body for n in names.values()):
+            errs.append(f"{tag} HX-Refresh response rendered operators")
+        return errs
+    if refresh:
+        errs.append(f"{tag} unexpected HX-Refresh")
+    if expect == "login":
         if resp.status_code != 302 or "/login/" not in resp.get("Location", ""):
             errs.append(f"{tag} anonymous: expected redirect to login, got {resp.status_code}")
-    elif role == "admin":
+    elif expect == "403":
         if resp.status_code != 403:
-            errs.append(f"{tag} admin must get 403 on operator-bearing URLs, got {resp.status_code}")
-    elif not World.role_area_ok(role, case.area) or (case.shift and not World.role_shift_ok(role, case.shift)):
-        if resp.status_code != 403:
-            errs.append(f"{tag} out of scope: expected 403, got {resp.status_code}")
-        elif not case.partial and D13_TEXT not in body:
-            errs.append(f"{tag} out of scope: 403 without the D13 page")
-    elif case.shift is None and role.startswith("lead") and resp.status_code == 403:
-        pass  # a shift-less page may refuse leads outright; that reveals nothing
+            errs.append(f"{tag} expected 403 (out of scope or admin), got {resp.status_code}")
+        elif D13_TEXT not in body:
+            errs.append(f"{tag} 403 without the D13 copy")
+    elif expect == "200-or-403" and resp.status_code == 403:
+        pass  # this case declares that it refuses leads outright; that reveals nothing
     elif resp.status_code != 200:
         errs.append(f"{tag} in scope: expected 200, got {resp.status_code}")
 
     # ---- identity oracle
-    mode = World.mode(role, gate1)
-    ok_200 = resp.status_code == 200
-    visible = {k for k in case.expected_keys(world) if world.may_see(role, k)} if ok_200 else set()
+    visible = {k for k in case.expected_keys(world) if world.may_see(role, k)} if resp.status_code == 200 else set()
     if mode == "hidden":
         visible = set()
 
@@ -172,15 +208,31 @@ def check(world, case, role, gate1, resp, how=""):
         if mode == "named" and unmapped and k in visible and f"Unmapped operator ({hub_id})" not in body:
             errs.append(f"{tag} unmapped alias should render as 'Unmapped operator ({hub_id})'")
 
+    if mode != "named":
+        # Model __str__ forms: Operator ("Operator #12") and OperatorAlias ("cores:ZQ-101").
+        for pattern in (r"Operator #\d+", rf"\b{re.escape(world.hub.code)}:[\w-]+"):
+            if re.search(pattern, body):
+                errs.append(f"{tag} raw model str() {re.search(pattern, body).group(0)!r} rendered in {mode} mode")
+
     letters = LETTER_RE.findall(body)
     if mode == "letter":
         distinct = {letter for _, letter in letters}
         if len(distinct) != len(visible):
             errs.append(f"{tag} expected {len(visible)} distinct letters, saw {sorted(distinct)}")
+        if not case.partial and case.expected is None and distinct:
+            dense = {_letters(i) for i in range(len(distinct))}
+            if distinct != dense:
+                errs.append(f"{tag} letters not dense: {sorted(distinct, key=letter_key)}")
         n_unmapped = sum(1 for k in visible if world.ops[k].name is None)
         seen_unmapped = {letter for label, letter in letters if label == "Unmapped operator"}
         if len(seen_unmapped) != n_unmapped:
             errs.append(f"{tag} expected {n_unmapped} 'Unmapped operator <letter>' labels, saw {sorted(seen_unmapped)}")
+        # Rows must not follow name order (e.g. Operator.Meta.ordering = ["name"]): within each
+        # table or list, letters appear in ascending order.
+        for block in BLOCK_RE.finditer(body):
+            seq = [letter for _, letter in LETTER_RE.findall(block.group(0))]
+            if [letter_key(x) for x in seq] != sorted(letter_key(x) for x in seq):
+                errs.append(f"{tag} letters out of order in a table/list: {seq} (name order leaking?)")
         if visible and not case.partial and GATE1_NOTICE not in body:
             errs.append(f"{tag} D12 Gate 1 notice missing above anonymized rows")
     elif letters:
@@ -203,7 +255,6 @@ def test_sweep(world, case, gate1):
         if not case.partial:
             errs += check(world, case, role, gate1, do_request(client, world, case), "page")
             continue
-        token = None
         if case.parent:
             parent_resp = do_request(client, world, CASES_BY_ID[case.parent])
             token = extract_token(parent_resp) if parent_resp.status_code == 200 else None
@@ -270,11 +321,36 @@ def fill(world, route):
     return "/" + re.sub(r"<(?:\w+:)?(\w+)>", sub, route.path)
 
 
-def discover(world):
-    """(marked routes, leak messages) for the current ROOT_URLCONF."""
-    marked, leaks = [], []
-    builder = client_for(world, "builder")
+DEFAULT_QUERY_PARAMS = ("area_id", "shift_id", "station_id", "line_id", "date")
+
+
+def discovery_query(world):
+    """GET params sent on every probe: the common window/scope params plus DISCOVERY_KWARGS."""
+    query = {name: guess_kwarg(world, name) for name in DEFAULT_QUERY_PARAMS}
+    query.update({name: fn(world) for name, fn in DISCOVERY_KWARGS.items()})
+    return query
+
+
+def identity_found(world, resp):
+    """Fixture names, hub IDs and model str() forms in a response body or its context."""
     needles = list(world.names.values()) + list(world.hub_ids.values())
+    body = resp.content.decode(errors="replace") if not resp.streaming else ""
+    found = [n for n in needles if n in body] + [n for s in context_strings(resp) for n in needles if n in s]
+    for pattern in (r"Operator #\d+", rf"\b{re.escape(world.hub.code)}:[\w-]+"):
+        found += re.findall(pattern, body)
+    return sorted(set(found))
+
+
+def discover(world):
+    """(marked routes, leak messages) for the current ROOT_URLCONF.
+
+    Every unmarked URL is requested as every role (with whatever Gate 1 state the caller
+    set), plain and as htmx, with and without the discovery query params. Any operator
+    identity in the response means the view renders operators without being registered.
+    """
+    marked, leaks = [], []
+    clients = {role: client_for(world, role) for role in ROLES}
+    query = discovery_query(world)
     for route in walk():
         if getattr(route.callback, OPERATOR_BEARING_ATTR, False):
             marked.append(route)
@@ -286,14 +362,16 @@ def discover(world):
         except LookupError as e:
             leaks.append(f"{route.path}: can't build kwarg {e}; add it to DISCOVERY_KWARGS in tests/sweep_registry.py")
             continue
-        for headers in ({}, {"HX-Request": "true"}):
-            resp = builder.get(path, headers=headers)
-            body = resp.content.decode(errors="replace") if not resp.streaming else ""
-            found = [n for n in needles if n in body] + [
-                n for s in context_strings(resp) for n in needles if n in s
-            ]
-            if found:
-                leaks.append(f"{path} ({route.name}) renders operator identity {sorted(set(found))} but its view "
+        probes = [({}, {}), (query, {}), (query, {"HX-Request": "true"})]
+        for role, client in clients.items():
+            hit = None
+            for params, headers in probes:
+                found = identity_found(world, client.get(path, params, headers=headers))
+                if found:
+                    hit = found
+                    break
+            if hit:
+                leaks.append(f"{path} ({route.name}) renders operator identity {hit} to {role} but its view "
                              "isn't @operator_bearing and registered in tests/sweep_registry.py")
                 break
     return marked, leaks
@@ -311,17 +389,19 @@ def test_every_operator_bearing_url_has_a_sweep_case(world):
     assert not stale, f"SweepCases for URLs that don't exist or aren't @operator_bearing: {sorted(stale)}"
 
 
-def test_unmarked_urls_render_no_operator_identity(world):
-    set_gate1(True)  # named mode is where a leak is easiest to see
+@pytest.mark.parametrize("gate1", [False, True], ids=["gate1_off", "gate1_on"])
+def test_unmarked_urls_render_no_operator_identity(world, gate1):
+    set_gate1(gate1)
     _, leaks = discover(world)
     assert not leaks, "\n".join(leaks)
 
 
 @pytest.mark.urls("tests.sweep_leaky_urls")
-def test_harness_catches_leaky_and_unregistered_views(world):
+@pytest.mark.parametrize("gate1", [False, True], ids=["gate1_off", "gate1_on"])
+def test_harness_catches_leaky_and_unregistered_views(world, gate1):
     """Self-test: a name-rendering view without @operator_bearing, and a marked view
     without a SweepCase, must both be reported."""
-    set_gate1(True)
+    set_gate1(gate1)
     marked, leaks = discover(world)
     assert any("sweep_demo_leaky" in m for m in leaks), leaks
     assert not any("sweep_demo_harmless" in m for m in leaks), leaks
@@ -345,3 +425,11 @@ def test_harness_detects_a_leak_in_a_registered_view(world):
     assert any("rendered but policy says letter" in e for e in errs)
     assert any("template context" in e for e in errs)
     assert any("distinct letters" in e for e in errs)
+
+    Fake.context = []
+    Fake.content = b"<table><tr><td>Operator C</td></tr><tr><td>Operator A</td></tr></table><p>Operator #12 cores:ZQ-101</p>"
+    errs = check(world, case, "ops_manager", False, Fake(), "self-test")
+    assert any("out of order" in e for e in errs)
+    assert any("'Operator #12'" in e for e in errs)
+    assert any("'cores:ZQ-101'" in e for e in errs)
+    assert any("not dense" in e for e in errs)
