@@ -9,12 +9,27 @@ jobs. Three containers: `web`, `scheduler`, `postgres`.
 ## Run it
 
 ```sh
-cp .env.example .env        # edit secrets
+cp .env.example .env        # then set DJANGO_SECRET_KEY: web refuses to start with the placeholder
+                            # python -c 'import secrets; print(secrets.token_urlsafe(50))'
 docker compose up --build   # web on http://localhost:8000
 ```
 
 The web container applies migrations on start. The scheduler runs `docker/crontab`:
 ingest every 5 minutes, the 7-day re-read at 02:00 plant time, then the trust grade.
+
+## Accounts and roles (pilot)
+
+Pilot users are Django local accounts (SSO/LDAP replaces them before rollout; see the stub in
+`takt/settings.py`, Open Question 6). For a dev or demo database:
+
+```sh
+docker compose exec web python manage.py seed_demo_users   # DEV/DEMO ONLY
+```
+
+It creates `builder` (superuser), `brian` (ops manager), a supervisor per area, a lead per shift
+of each area, and `admin` (configuration only). The password is `$TAKT_DEMO_PASSWORD`, or a
+printed dev-only default. Until Gate 1 is approved in Site settings, only the builder sees
+operator names; everyone else sees per-page letters ("Operator A, B, C").
 
 ## Tests
 

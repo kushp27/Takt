@@ -6,6 +6,8 @@ services:
     build:
       target: test
     image: takt:test
+    environment:
+      DJANGO_SECRET_KEY: test-only-not-a-secret  # settings refuse the dev default outside DEBUG
     ports: !reset []
     volumes:
       - .:/app

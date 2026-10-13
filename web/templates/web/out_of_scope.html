@@ -1,0 +1,15 @@
+{% extends "web/base.html" %}
+{% comment %}Design review D13: outside the user's role scope. Rendered with HTTP 403 by accounts.decorators.{% endcomment %}
+{% block title %}Not in your assignment{% endblock %}
+{% block content %}
+<h1>This area isn't in your assignment</h1>
+{% if is_admin_role %}
+<p>The admin role covers configuration only. Operator views aren't part of it.</p>
+<p><a href="{{ own_area_url }}">Go to configuration</a></p>
+{% elif reason == "shift" %}
+<p>This shift belongs to another lead.</p>
+<p><a href="{{ own_area_url }}">Back to your area</a></p>
+{% else %}
+<p><a href="{{ own_area_url }}">Back to your area</a></p>
+{% endif %}
+{% endblock %}

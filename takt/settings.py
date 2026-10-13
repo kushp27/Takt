@@ -18,8 +18,15 @@ def env_bool(name, default=False):
     return env(name, str(default)).lower() in ("1", "true", "yes", "on")
 
 
-SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-insecure-key")
+DEV_SECRET_KEY = "dev-only-insecure-key"
+SECRET_KEY = env("DJANGO_SECRET_KEY", DEV_SECRET_KEY)
 DEBUG = env_bool("DJANGO_DEBUG", False)
+# The secret signs sessions and the Gate 1 page tokens/letters (accounts.policy). Outside
+# DEBUG it must be set to a real value: never the dev default or the .env.example placeholder.
+if not DEBUG and SECRET_KEY in ("", DEV_SECRET_KEY, "change-me-to-a-long-random-string"):
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured("Set DJANGO_SECRET_KEY to a long random value (see .env.example).")
 ALLOWED_HOSTS = [h for h in env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
 CSRF_TRUSTED_ORIGINS = [o for o in env("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o]
 
@@ -90,8 +97,23 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# Pilot: Django local accounts for named pilot users only. SSO/LDAP via
-# django-auth-ldap replaces these before rollout (Open Question 6); not wired yet.
+# --------------------------------------------------------------------------
+# Authentication (design Component 7)
+# Pilot: Django local accounts for named pilot users only
+# (`manage.py seed_demo_users` creates dev/demo accounts; never use it in production).
+#
+# SSO/LDAP STUB -- NOT INSTALLED, NOT ACTIVE.
+# Before rollout beyond the pilot, django-auth-ldap (matching IT's other plant
+# tools) replaces local accounts. Blocked on Open Question 6: which SSO or LDAP do
+# IT's plant tools use? When answered:
+#   1. add django-auth-ldap to requirements.txt;
+#   2. AUTHENTICATION_BACKENDS = ["django_auth_ldap.backend.LDAPBackend"]
+#      (keep ModelBackend only for the break-glass builder account);
+#   3. AUTH_LDAP_SERVER_URI, AUTH_LDAP_BIND_DN, AUTH_LDAP_BIND_PASSWORD from env;
+#   4. map LDAP groups to accounts.Profile.role and Profile.areas/shift
+#      (a populate_user signal handler in accounts/), and is_superuser only for the builder.
+# Until then Django's default ModelBackend is used.
+# --------------------------------------------------------------------------
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "login"
