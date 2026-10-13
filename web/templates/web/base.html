@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
   {% block extra_head %}{% endblock %}
   <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
+  <script src="{% static 'ops/freshness.js' %}" defer></script>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
   <header class="site-header">
@@ -16,15 +17,43 @@
     <nav aria-label="Main">
       <ul>{% block nav %}{% endblock %}</ul>
     </nav>
-    <div class="freshness">{% block freshness %}{% endblock %}</div>
+    <div class="freshness">{% block freshness %}{% include "ops/partials/freshness_header.html" %}{% endblock %}</div>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form>
     {% endif %}
   </header>
-  {% block banner %}{% endblock %}
+  {% block banner %}{% if user.is_authenticated %}{% include "ops/partials/stale_banner.html" %}{% endif %}{% endblock %}
   <main id="main">
     {% block content %}{% endblock %}
   </main>
   <div id="live-region" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+  <script>
+  /* D13 htmx states. A 403 fragment ("This area isn't in your assignment") is swapped in
+     like a normal response. Any other failure shows the inline error with Retry; elements
+     can set data-load-error, default "Couldn't load stations." (design review D13). */
+  function taktInline403(e) {
+    var x = e.detail.xhr;
+    return !!(x && x.status === 403 && x.getResponseHeader("X-Takt-Inline"));
+  }
+  document.addEventListener("htmx:beforeSwap", function (e) {
+    if (taktInline403(e)) { e.detail.shouldSwap = true; e.detail.isError = false; }
+  });
+  function taktLoadError(e) {
+    var elt = e.detail.elt, target = e.detail.target || elt;
+    if (!target || taktInline403(e)) return;
+    var p = document.createElement("p"), retry = document.createElement("button");
+    p.className = "inline-error"; p.setAttribute("role", "alert");
+    p.textContent = (elt.getAttribute("data-load-error") || "Couldn't load stations.") + " ";
+    retry.type = "button"; retry.textContent = "Retry";
+    var cfg = e.detail.requestConfig || {};
+    retry.addEventListener("click", function () {
+      htmx.ajax((cfg.verb || "get").toUpperCase(), cfg.path, {source: elt, target: target});
+    });
+    p.appendChild(retry);
+    target.replaceChildren(p);
+  }
+  document.addEventListener("htmx:responseError", taktLoadError);
+  document.addEventListener("htmx:sendError", taktLoadError);
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,1 @@
+{% comment %}Print sheet data-time lines (D20, eng re-review D6). Rendered by {% print_header hub %}.{% endcomment %}{% if header %}<div class="print-freshness">{% if header.stale %}<p class="print-stale"><strong>{{ header.stale_text }}</strong></p>{% endif %}<p>{{ header.data_as_of }} · {{ header.printed }} · late-closing jobs may change totals</p></div>{% endif %}

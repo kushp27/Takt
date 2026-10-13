@@ -82,3 +82,17 @@ button, .button { cursor: pointer; color: var(--accent); border-color: var(--acc
 .freshness { font-size: var(--size-table); color: var(--text-2); }
 main { padding: var(--s5); max-width: 1440px; }
 .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Freshness (Component 9) and stale data (design D9). Owned by ops; see ops/templatetags/takt_freshness.py.
+   Stale is shown with the word "stale", never colour alone; values are muted, not hidden. */
+.freshness-line { margin: 0; }
+.stale-banner { border-bottom: 1px solid var(--line); border-top: 2px solid var(--ink);
+  padding: var(--s2) var(--s5); background: var(--bg); color: var(--ink); }
+.stale-banner p { margin: 0; }
+.stale-tag { display: inline-block; border: 1px solid var(--text-2); border-radius: var(--radius);
+  padding: 0 var(--s1); font-size: 12px; font-weight: 600; color: var(--text-2); background: transparent;
+  text-transform: lowercase; white-space: nowrap; }
+.is-stale, .is-stale td, .is-stale .num { color: var(--text-2); }
+.is-stale .status-behind, .is-stale .status-yield, .is-stale .status-ok { color: var(--text-2); }
+.freshness-notice { font-size: var(--size-table); }
+.print-freshness p { margin: 0; }
