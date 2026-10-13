@@ -26,6 +26,9 @@ TEMPLATE_BAD = re.compile(
     re.IGNORECASE,
 )
 TAG_RE = re.compile(r"{{.*?}}|{%.*?%}", re.DOTALL)
+# Bare output of an operator or alias object ({{ x.operator }}, {{ alias|upper }}): its
+# str() is "Operator #12" / "cores:ZQ-101", which bypasses the policy.
+BARE_OUTPUT = re.compile(r"^\{\{\s*(?:[\w.]+\.)?\w*" + _LONG + r"(?:e?s)?\s*(?:\|.*)?\}\}$", re.DOTALL | re.IGNORECASE)
 
 # Python in the view layer: these may touch names (the policy itself and its tags).
 VIEW_ALLOW = {"accounts/policy.py", "web/templatetags/operator.py"}
@@ -52,6 +55,8 @@ def template_violations(text):
             continue
         for m in TEMPLATE_BAD.finditer(tag):
             out.append(f"{tag.strip()!r} ({m.group(0)})")
+        if BARE_OUTPUT.match(tag.strip()):
+            out.append(f"{tag.strip()!r} (bare operator/alias output)")
     return out
 
 
@@ -104,13 +109,16 @@ def test_views_never_pass_raw_operator_names():
 def test_template_lint_catches_known_shapes():
     for src in ["{{ operator.name }}", "{{ row.alias.operator.name }}", "{{ job.alias.operator.name|upper }}",
                 "{% if op.name %}", "{{ a.hub_operator_id }}", "{% for n in operators.name %}",
-                "{{ worker.name }}", '{% sort rows "alias__operator__name" %}', "{{ ops.0.name }}"]:
+                "{{ worker.name }}", '{% sort rows "alias__operator__name" %}', "{{ ops.0.name }}",
+                "{{ row.operator }}", "{{ job.alias }}", "{{ operator }}", "{{ row.alias|default:'-' }}",
+                "{{ x.operator|upper }}"]:
         assert template_violations(src), src
 
 
 def test_template_lint_allows_station_and_line_names():
     for src in ["{{ station.name }}", "{{ line.name }}", "{% operator row.alias %}", "{{ area.name }}",
-                "{{ part.family.name }}", "{{ options.name }}", "{{ shop.name }}",
+                "{{ part.family.name }}", "{{ options.name }}", "{{ shop.name }}", "{{ row.station }}",
+                "{{ row.operator_count }}",
                 "{% comment %}operator.name is banned{% endcomment %}"]:
         assert not template_violations(src), src
 
