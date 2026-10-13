@@ -4,8 +4,9 @@ import json
 
 from accounts import scope as role_scope
 from accounts.models import Profile
-from core.models import Line, Station
+from core.models import Line, SiteSettings, Station
 from metrics import api
+from metrics.windows import HubPlan
 
 DECIDER_ROLES = (role_scope.BUILDER, Profile.OPS_MANAGER, Profile.SUPERVISOR)
 
@@ -51,15 +52,16 @@ def announce(response, text, **events):
     return response
 
 
-def station_blocks(area, window, hub):
+def station_blocks(area, window, hub, plan=None):
     """My Shift / print sheet body: [(Station, [OperatorGroup])] for the area's stations on `hub` (the
     shift's hub: a shift belongs to one hub, so another hub's same-named shift never leaks in) that ran in
     the window, in line then sequence order. Grouped by station and part, never ranked across stations."""
     stations = (Station.objects.filter(line__area=area, line__hub=hub).select_related("line__hub")
                 .order_by("line__name", "sequence"))
+    plan, settings = plan or HubPlan(hub), SiteSettings.load()
     blocks = []
     for st in stations:
-        groups = api.operator_groups(st, None, window)
+        groups = api.operator_groups(st, None, window, plan=plan, settings=settings)
         if groups:
             blocks.append((st, groups))
     return blocks

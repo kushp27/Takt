@@ -31,6 +31,7 @@ from disputes import service as disputes
 from disputes.models import Dispute
 from metrics import api
 from metrics.api import Scope
+from metrics.windows import HubPlan
 from ops import freshness
 from web import windows
 
@@ -113,7 +114,7 @@ def _page_scope(area, shift, window, mine=()):
     return OperatorScope(area_ids=[area.pk], shift_ids=[shift.pk], date_from=min(dates), date_to=max(dates))
 
 
-def _body(request, area, shift, window, state):
+def _body(request, area, shift, window, state, plan=None):
     """What #shift-table shows (shared by the page, the Refresh fragment and the print sheet)."""
     hub = shift.hub
     no_shift = None
@@ -125,7 +126,7 @@ def _body(request, area, shift, window, state):
                                  f"{urlencode({'date': (last or window.date_to).isoformat(), 'days': 14, 'shift_id': shift.pk})}"),
         }
         return {"no_shift": no_shift, "blocks": [], "conversation": [], "start": None}
-    blocks = station_blocks(area, window.metrics, shift.hub)
+    blocks = station_blocks(area, window.metrics, shift.hub, plan=plan)
     conversation = api.conversation_from_groups([g for _, groups in blocks for g in groups])
     start = None
     # DEVIATION: "a link to the last shift's sheet" is read as the previous run of the SAME shift (a lead
@@ -161,10 +162,11 @@ def my_shift(request, area_id):
         if shift is None:
             return render(request, "web/home.html", {"message": "No shift is set up for this area yet."})
         return redirect(my_shift_url(area, shift, date=request.GET.get("date") or None))
-    window, state = windows.my_shift_window(request, shift)
+    plan = HubPlan(shift.hub)
+    window, state = windows.my_shift_window(request, shift, stamper=plan.stamper)
     mine = _my_disputes(request.user, area, shift)
     ctx = page_context(request, _page_scope(area, shift, window, mine))
-    body = _body(request, area, shift, window, state)
+    body = _body(request, area, shift, window, state, plan)
     picker = windows.picker(request, window, reverse("my_shift", kwargs={"area_id": area.pk}), area=area,
                             allow_all_shifts=False)
     return render(request, "web/my_shift.html", {
@@ -185,9 +187,10 @@ def my_shift_table(request, area_id):
     shift = _shift_or_none(request)
     if shift is None:
         return render_out_of_scope(request, reason="shift")
-    window, state = windows.my_shift_window(request, shift)
+    plan = HubPlan(shift.hub)
+    window, state = windows.my_shift_window(request, shift, stamper=plan.stamper)
     ctx = page_context(request, _page_scope(area, shift, window), parents=(MY_SHIFT_VIEW,))
-    body = _body(request, area, shift, window, state)
+    body = _body(request, area, shift, window, state, plan)
     return render(request, "web/partials/shift_table_fragment.html", {
         "takt_page": ctx, "area": area, "shift": shift, "window": window, "hub": shift.hub,
         "refresh_url": _refresh_url(area, window), "refresh_target": REFRESH_TARGET,

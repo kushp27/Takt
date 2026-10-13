@@ -127,14 +127,14 @@ class ShiftNow:
     last_date: date | None  # the previous run of this shift that has ended (D10 links)
 
 
-def shift_now(shift, at=None):
+def shift_now(shift, at=None, stamper=None):
     """My Shift default for `shift`: the run containing now (a 23:00-07:00 shift opened at 02:00
     is the run that started yesterday: one production day, eng D2); else today's run if it has
     started; else the latest run that has started (looking back 14 days)."""
     at = at or now()
     hub = shift.hub
     today = cs.local_date(hub, at)
-    stamper = cs.ShiftStamper(hub)
+    stamper = stamper or cs.ShiftStamper(hub)
 
     def run(d):
         return next((w for w in stamper.windows_on(d) if w.shift.pk == shift.pk), None)
@@ -245,13 +245,17 @@ def area_window(request, area, hub):
     return ScreenWindow(d, d, shift or s, False, True)
 
 
-def my_shift_window(request, shift):
-    """D21: the lead's current shift, live. Returns (ScreenWindow, ShiftNow)."""
-    state = shift_now(shift)
+def my_shift_window(request, shift, stamper=None):
+    """D21: the lead's current shift, live. Returns (ScreenWindow, ShiftNow).
+    stamper: a core.shifts.ShiftStamper for the shift's hub, to share its cached calendar."""
+    stamper = stamper or cs.ShiftStamper(shift.hub)
+    state = shift_now(shift, stamper=stamper)
     d = _date(request)
     if d is None:
         return ScreenWindow(state.production_date, state.production_date, shift, state.live, True), state
-    return ScreenWindow(d, d, shift, _is_live(shift.hub, d, shift), False), state
+    w = stamper.window_at(now())
+    live = bool(w and w.production_date == d and w.shift.pk == shift.pk)
+    return ScreenWindow(d, d, shift, live, False), state
 
 
 def _span(d, days):
