@@ -2,7 +2,7 @@ import re
 from datetime import timezone as dt_timezone
 from urllib.parse import urlsplit
 
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.db import DatabaseError
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
@@ -49,7 +49,6 @@ _SAFE_TARGET = re.compile(r"^[#.][A-Za-z][A-Za-z0-9_-]*$")
 
 @never_cache
 @require_GET
-@login_required
 def freshness_notice(request):
     """Live My Shift poll (eng re-review D5).
 
@@ -59,7 +58,14 @@ def freshness_notice(request):
     200 + a tiny fragment "New data from 2:45 PM · Refresh" when the hub has a new transaction
     after `since` (an empty `since` means the page rendered with no data). Otherwise 204, which
     htmx ignores. No operator data. The poller is rendered by {% freshness_notice %}.
+
+    Login required. An htmx poll from an expired session gets 204 (not a redirect), so the login
+    page is never swapped into the polite live region; the next navigation shows the login page.
     """
+    if not request.user.is_authenticated:
+        if request.headers.get("HX-Request"):
+            return HttpResponse(status=204)
+        return redirect_to_login(request.get_full_path())
     hub = Hub.objects.filter(code=request.GET.get("hub", "")).first()
     if hub is None:
         return HttpResponseBadRequest("unknown hub")
@@ -89,7 +95,19 @@ def freshness_notice(request):
         refresh_target = ""
     return render(request, "ops/partials/freshness_notice_fragment.html", {
         "notice_hub": hub,
-        "new_data_at": freshness.display_time(latest),
+        "new_data_at": freshness.display_time(latest, tz=hub.plant_timezone),
         "refresh_url": refresh_url,
         "refresh_target": refresh_target,
     })
+
+
+def server_error(request, *args, **kwargs):
+    """handler500 (D13): errors raised outside a view (e.g. in middleware) while the database is down
+    still get the plain 503 page; anything else gets Django's default 500."""
+    from django.views.defaults import server_error as default_server_error
+
+    from .middleware import database_unavailable_response
+
+    if not freshness.database_reachable():
+        return database_unavailable_response()
+    return default_server_error(request, *args, **kwargs)

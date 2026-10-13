@@ -6,6 +6,9 @@
     {% print_header hub %}              print sheet header lines (D20, eng re-review D6)
     {% freshness_notice hub refresh_url="/shift/" refresh_target="#shift-table" %}
                                         live My Shift poller + polite notice region (eng re-review D5)
+    {% freshness_notice_reset hub refresh_url="/shift/" refresh_target="#shift-table" %}
+                                        put in the fragment Refresh returns: clears the notice and
+                                        restarts polling out of band (hx-swap-oob), forms untouched
 
 `hub` may be a core.models.Hub, a hub code string, or a HubFreshness. Tags reuse the request's
 `freshness` snapshot (ops.context_processors.freshness) when present, so a page computes it once.
@@ -67,8 +70,7 @@ def print_header(context, hub):
     return {"header": header}
 
 
-@register.inclusion_tag("ops/partials/freshness_notice.html", takes_context=True)
-def freshness_notice(context, hub, refresh_url="", refresh_target=""):
+def _poller_context(context, hub, refresh_url, refresh_target):
     f = _resolve(context, hub)
     if f is None:
         return {"poll_url": None}
@@ -78,3 +80,14 @@ def freshness_notice(context, hub, refresh_url="", refresh_target=""):
     if refresh_target:
         params["refresh_target"] = refresh_target
     return {"poll_url": f"{reverse('freshness_notice')}?{urlencode(params)}", "hub_code": f.code}
+
+
+@register.inclusion_tag("ops/partials/freshness_notice.html", takes_context=True)
+def freshness_notice(context, hub, refresh_url="", refresh_target=""):
+    return _poller_context(context, hub, refresh_url, refresh_target)
+
+
+@register.inclusion_tag("ops/partials/freshness_notice_reset.html", takes_context=True)
+def freshness_notice_reset(context, hub, refresh_url="", refresh_target=""):
+    """Include in the fragment Refresh swaps in: an hx-swap-oob poller with the new `since`."""
+    return _poller_context(context, hub, refresh_url, refresh_target)

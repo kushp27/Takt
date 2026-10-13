@@ -1,3 +1,4 @@
-{% comment %}Stale-data banner (design D9), full width under the nav. Needs `freshness` (context processor).{% endcomment %}{% if freshness.any_stale %}<section class="stale-banner" aria-label="Stale data">{% for h in freshness.stale_hubs %}
-  <p><strong>Stale data:</strong> {% if h.stopped_at %}{{ h.name }} data stopped at <time datetime="{{ h.stopped_at|date:'c' }}">{{ h.stopped_at_display }}</time>; numbers for {{ h.short_name }} lines may be out of date.{% else %}{{ h.name }} has sent no data yet; numbers for {{ h.short_name }} lines are unavailable.{% endif %}</p>{% endfor %}
+{% comment %}Stale-data banner (design D9), full width under the nav. Needs `freshness` (context processor).
+Copy is the doc's exactly: "Dies Hub data stopped at 6:40 AM; numbers for Dies lines may be out of date".{% endcomment %}{% if freshness.any_stale %}<section class="stale-banner" aria-label="Stale data">{% for h in freshness.stale_hubs %}
+  <p>{% if h.stopped_at %}{{ h.name }} data stopped at <time datetime="{{ h.stopped_at|date:'c' }}">{{ h.stopped_at_display }}</time>; numbers for {{ h.short_name }} lines may be out of date{% else %}{{ h.name }} has sent no data yet; numbers for {{ h.short_name }} lines are unavailable{% endif %}</p>{% endfor %}
 </section>{% endif %}

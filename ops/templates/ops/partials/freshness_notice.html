@@ -2,6 +2,7 @@
 Live My Shift poller (eng re-review D5). Rendered by {% freshness_notice hub refresh_url=... refresh_target=... %}.
 The outer element is a stable polite live region. The inner span polls every 300s; on a 204 nothing
 happens; on a 200 it is replaced (outerHTML) by the notice, which carries no hx-trigger, so polling
-stops and the region announces exactly once. Place this in its own container, NEVER inside the
-table or the dispute form.
-{% endcomment %}{% if poll_url %}<div class="freshness-notice" id="freshness-notice-{{ hub_code }}" role="status" aria-live="polite" aria-atomic="true"><span hx-get="{{ poll_url }}" hx-trigger="every 300s" hx-swap="outerHTML"></span></div>{% endif %}
+stops and the region announces exactly once. After Refresh, the refreshed fragment includes
+{% freshness_notice_reset hub ... %}, which swaps a new poller (new `since`) into this region out of band.
+Place this in its own container, NEVER inside the table or the dispute form.
+{% endcomment %}{% if poll_url %}<div class="freshness-notice" id="freshness-notice-{{ hub_code }}" role="status" aria-live="polite" aria-atomic="true">{% include "ops/partials/freshness_poller.html" %}</div>{% endif %}
