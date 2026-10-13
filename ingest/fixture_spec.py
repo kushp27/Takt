@@ -6,7 +6,8 @@ Dies Hub (Open Question 1). Codes are invented and deliberately look invented.
 
 Behaviours drive the trust grade (Component 4) so the demo shows every grade:
 - "clean"        -> green
-- "eos_close"    -> jobs batch-closed at shift end (C share); amber at 15%, red at 40%
+- "eos_close"    -> jobs batch-closed at shift end (C share, and O: a forgotten job overlaps the
+                    operator's later jobs); amber at 1.5% of jobs, red at 40%
 - "overlap"      -> operator runs two jobs at once (O share); amber
 - batch station  -> red by definition (the kiln), identical start/complete timestamps
 - part C-4473 is introduced 12 days before the data end -> "not graded yet"
@@ -37,7 +38,10 @@ class StationSpec:
     crew: int = 2
     qty: int = 10  # units per job (per load for the kiln)
     target_per_shift: int = 600  # nominal units per shift at pace 1.0
-    pace: float = 1.0  # how fast this station runs relative to demand
+    # How fast this station runs relative to demand. The generator loses roughly 10-25% of nominal
+    # output to shift start, break and end-of-shift boundaries, so Cores flow stations are set
+    # above 1.0 to land near takt (demo check: Cores ~100-105% pace, Dies ~85-90%, behind).
+    pace: float = 1.0
     behaviour: str = "clean"
     behaviour_share: float = 0.0
 
@@ -67,13 +71,13 @@ CORES = HubSpec(
     code="cores", name="Cores Hub", area="Cores Area", line="Cores Line 1",
     quantity_is_gross=False, op_prefix="C",
     stations=(
-        StationSpec("SYN-INJ-3", "Injection 3", 1, crew=3, qty=12, pace=1.04),
-        StationSpec("SYN-DBR-1", "Deburr 1", 2, qty=25, target_per_shift=500, pace=1.03,
-                    behaviour="eos_close", behaviour_share=0.15),
-        StationSpec("SYN-LCH-2", "Leach 2", 3, count_trusted=False, qty=30, pace=0.95,
+        StationSpec("SYN-INJ-3", "Injection 3", 1, crew=3, qty=12, pace=1.19),
+        StationSpec("SYN-DBR-1", "Deburr 1", 2, qty=25, target_per_shift=500, pace=1.35,
+                    behaviour="eos_close", behaviour_share=0.015),
+        StationSpec("SYN-LCH-2", "Leach 2", 3, count_trusted=False, qty=30, pace=1.16,
                     behaviour="eos_close", behaviour_share=0.40),
         StationSpec("SYN-KILN-1", "Fire (kiln)", 4, batch=True, crew=1, qty=50, pace=1.0),
-        StationSpec("SYN-SORT-1", "Post-fire sort", 5, qty=20, pace=1.02),
+        StationSpec("SYN-SORT-1", "Post-fire sort", 5, qty=20, pace=1.25),
     ),
     families={"Core-S": {"C-4471": 0.6, "C-4472": 0.4}, "Core-L": {"C-5101": 1.0}},
     routing={
