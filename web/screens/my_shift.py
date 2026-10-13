@@ -170,6 +170,7 @@ def my_shift(request, area_id):
     return render(request, "web/my_shift.html", {
         "takt_page": ctx, "area": area, "shift": shift, "window": window, "hub": shift.hub, "picker": picker,
         "my_disputes": mine, "refresh_url": _refresh_url(area, window), "refresh_target": REFRESH_TARGET,
+        "page_url": my_shift_url(area, shift, date=window.date_to.isoformat()),
         "print_url": f"{reverse('print_sheet', kwargs={'area_id': area.pk})}?{window.query()}",
         "nav_active": "my_shift", **body,
     })
@@ -189,7 +190,8 @@ def my_shift_table(request, area_id):
     body = _body(request, area, shift, window, state)
     return render(request, "web/partials/shift_table_fragment.html", {
         "takt_page": ctx, "area": area, "shift": shift, "window": window, "hub": shift.hub,
-        "refresh_url": _refresh_url(area, window), "refresh_target": REFRESH_TARGET, **body,
+        "refresh_url": _refresh_url(area, window), "refresh_target": REFRESH_TARGET,
+        "page_url": my_shift_url(area, shift, date=window.date_to.isoformat()), **body,
     })
 
 

@@ -11,7 +11,7 @@ own container, outside the table and every form (eng re-review D5). "My disputes
     <p class="no-print"><a href="{{ print_url }}">Print sheet</a></p>
   </div>
   {% include "web/partials/window_picker.html" %}
-  <div class="live-notice no-print">{% freshness_notice hub refresh_url=refresh_url refresh_target=refresh_target %}</div>
+  {% if window.live %}<div class="live-notice no-print">{% freshness_notice hub refresh_url=refresh_url refresh_target=refresh_target page_url=page_url %}</div>{% endif %}
   <p class="phone-note">Open on a desktop to dispute or drill down.</p>
   {% gate1_notice %}
   {% include "web/partials/my_disputes.html" %}

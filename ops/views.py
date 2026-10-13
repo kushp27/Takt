@@ -93,11 +93,15 @@ def freshness_notice(request):
     refresh_target = request.GET.get("refresh_target", "")
     if not _SAFE_TARGET.match(refresh_target):
         refresh_target = ""
+    page_url = request.GET.get("page_url", "")
+    if not _SAFE_URL.match(page_url):
+        page_url = ""
     return render(request, "ops/partials/freshness_notice_fragment.html", {
         "notice_hub": hub,
         "new_data_at": freshness.display_time(latest, tz=hub.plant_timezone),
         "refresh_url": refresh_url,
         "refresh_target": refresh_target,
+        "page_url": page_url or refresh_url,
     })
 
 

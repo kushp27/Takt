@@ -267,3 +267,23 @@ def test_other_leads_shift_is_refused(p, client):
     client.force_login(p["users"]["lead_3rd"])
     resp = client.get(p["url"])
     assert resp.status_code == 403 and "This shift belongs to another lead." in resp.content.decode()
+
+
+def test_refresh_guard_runs_before_the_request_and_link_has_the_page_url(p, client):
+    """HX-Refresh reloads before htmx:beforeSwap, so the guard also cancels in htmx:beforeRequest."""
+    js = open("ops/static/ops/freshness.js").read()
+    before = js[js.index('"htmx:beforeRequest"'):js.index('"htmx:beforeSwap"')]
+    assert "data-takt-refresh" in before and "busyForm(target)" in before and "evt.preventDefault()" in before
+    html = _page(client, p, p["users"]["lead"])
+    poll = re.search(r'class="freshness-poller" hx-get="([^"]+)"', html).group(1)
+    assert f"page_url=%2Farea%2F{p['area'].pk}%2Fshift%2F%3Fshift_id%3D{p['first'].pk}%26date%3D2026-09-15" in poll
+    p["hub"].last_new_transaction_at = p["now"] + timedelta(minutes=1)
+    p["hub"].save()
+    frag = client.get(unescape(poll), HTTP_HX_REQUEST="true").content.decode()
+    assert f'href="/area/{p["area"].pk}/shift/?shift_id={p["first"].pk}&amp;date=2026-09-15"' in frag
+    assert 'hx-get="/area/' in frag and "/shift/table/" in frag
+
+
+def test_no_live_notice_on_a_past_shift(p, client):
+    html = _page(client, p, p["users"]["lead"], p["url"] + "&date=2026-09-14")
+    assert "freshness-notice" not in html and "live-notice" not in html

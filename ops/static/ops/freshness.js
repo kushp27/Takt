@@ -5,7 +5,8 @@
    - Refresh controls carry data-takt-refresh (the notice fragment adds it).
 
    1. Guard: a Refresh is cancelled when the region it would replace contains any open data-takt-form,
-      with or without input. The notice then says "Finish or cancel your dispute, then Refresh".
+      with or without input. It is checked before the request is sent (htmx:beforeRequest: an HX-Refresh
+      response would reload the page before htmx:beforeSwap ever runs) and again before the swap. The notice then says "Finish or cancel your dispute, then Refresh".
       A plain-link Refresh (full reload) is guarded the same way against any such form on the page.
    2. After a Refresh swap, focus moves to the swapped region's heading and #live-region announces
       "New data loaded" once. A Refresh link may override the text with data-takt-loaded="…".
@@ -39,6 +40,17 @@
     var elt = cfg && cfg.elt;
     return elt && elt.hasAttribute && elt.hasAttribute("data-takt-refresh") ? elt : null;
   }
+
+  document.addEventListener("htmx:beforeRequest", function (evt) {
+    var elt = evt.detail && evt.detail.elt;
+    if (!elt || !elt.hasAttribute || !elt.hasAttribute("data-takt-refresh")) return;
+    var selector = elt.getAttribute("hx-target");
+    var target = evt.detail.target || (selector && document.querySelector(selector));
+    if (busyForm(target)) {
+      evt.preventDefault();
+      warn(elt);
+    }
+  });
 
   document.addEventListener("htmx:beforeSwap", function (evt) {
     var trigger = refreshTrigger(evt);
