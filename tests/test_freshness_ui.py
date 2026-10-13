@@ -216,7 +216,7 @@ def test_page_with_dispute_form_loads_the_refresh_guard(rf, settings):
     assert 'role="status"' in page and 'hx-trigger="every 300s"' in page
     js = (Path(settings.BASE_DIR) / "ops/static/ops/freshness.js").read_text()
     for needle in ('"htmx:beforeSwap"', "shouldSwap = false", "form[data-takt-form]", "data-takt-refresh",
-                   "Finish or cancel your dispute, then Refresh", "document.activeElement",
+                   "Finish or cancel your dispute, then Refresh",
                    '"htmx:afterSwap"', "heading.focus()", "live-region", "New data loaded"):
         assert needle in js, needle
 

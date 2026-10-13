@@ -80,7 +80,7 @@ Response body:
 | `hubs[].last_successful_ingest_at` | When the last ingest run for the hub succeeded |
 | `hubs[].in_scheduled_shift` / `shift` | Whether a scheduled shift is running now, and which |
 | `hubs[].stale` / `stale_since` | Whether the hub is stale, and when it crossed the threshold |
-| `hubs[].minutes_quiet` | Minutes of the current shift with no new transaction (`null` outside a shift) |
+| `hubs[].minutes_quiet` | Minutes with no new transaction, counted across back-to-back scheduled shifts (`null` outside a shift) |
 
 The `web` container's Docker healthcheck also polls `/healthz`, so a stale hub marks the container
 `unhealthy` in `docker ps` (Docker does not restart it; a restart would not fix an MES outage).

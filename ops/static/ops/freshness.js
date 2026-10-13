@@ -4,8 +4,8 @@
    - Every dispute form (and any form whose input must survive a Refresh) carries data-takt-form.
    - Refresh controls carry data-takt-refresh (the notice fragment adds it).
 
-   1. Guard: a Refresh is cancelled when the region it would replace contains a data-takt-form that
-      has user input or holds focus. The notice then says "Finish or cancel your dispute, then Refresh".
+   1. Guard: a Refresh is cancelled when the region it would replace contains any open data-takt-form,
+      with or without input. The notice then says "Finish or cancel your dispute, then Refresh".
       A plain-link Refresh (full reload) is guarded the same way against any such form on the page.
    2. After a Refresh swap, focus moves to the swapped region's heading and #live-region announces
       "New data loaded" once. A Refresh link may override the text with data-takt-loaded="…".
@@ -14,31 +14,12 @@
   "use strict";
   var GUARD_MESSAGE = "Finish or cancel your dispute, then Refresh";
 
-  function isDirty(form) {
-    var els = form.elements;
-    for (var i = 0; i < els.length; i++) {
-      var el = els[i];
-      if (el.type === "checkbox" || el.type === "radio") {
-        if (el.checked !== el.defaultChecked) return true;
-      } else if (el.tagName === "SELECT") {
-        for (var j = 0; j < el.options.length; j++) {
-          if (el.options[j].selected !== el.options[j].defaultSelected) return true;
-        }
-      } else if (el.type !== "hidden" && "defaultValue" in el && el.value !== el.defaultValue) {
-        return true;
-      }
-    }
-    return false;
-  }
-
+  // Doc (re-review D5): open dispute forms are never touched, so any open form[data-takt-form]
+  // inside the swap target blocks Refresh, whether or not it has input yet.
   function busyForm(scope) {
-    if (!scope || !scope.querySelectorAll) return null;
-    var forms = Array.prototype.slice.call(scope.querySelectorAll("form[data-takt-form]"));
-    if (scope.matches && scope.matches("form[data-takt-form]")) forms.push(scope);
-    for (var i = 0; i < forms.length; i++) {
-      if (forms[i].contains(document.activeElement) || isDirty(forms[i])) return forms[i];
-    }
-    return null;
+    if (!scope || !scope.querySelector) return null;
+    if (scope.matches && scope.matches("form[data-takt-form]")) return scope;
+    return scope.querySelector("form[data-takt-form]");
   }
 
   function warn(trigger) {

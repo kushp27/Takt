@@ -99,7 +99,7 @@ class HubFreshness:
 
     @property
     def minutes_quiet(self):
-        """Minutes of the current shift with no new transaction (None outside a shift)."""
+        """Minutes with no new transaction, counted across the contiguous block of scheduled shifts (None outside a shift)."""
         if self.quiet_from is None:
             return None
         return round((self.now - self.quiet_from).total_seconds() / 60, 2)
