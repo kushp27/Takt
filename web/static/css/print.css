@@ -1,2 +1,47 @@
-/* Print stylesheet (design D20). Loaded with media="print" on every page: it hides the nav. */
-.site-header, .stale-banner, nav, #live-region { display: none !important; }
+/* Print stylesheet (design D20). Loaded with media="print" on every page.
+   US Letter portrait, black and white: no colour carries meaning on paper, so everything prints black on
+   white, badges keep their outline, the stale line is bold and boxed. It hides the nav and every control. */
+
+@page {
+  size: letter portrait;
+  margin: 0.6in 0.5in 0.7in;
+  @bottom-left { content: "For lead use. Not for posting."; font: 9pt "IBM Plex Sans", sans-serif; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "IBM Plex Sans", sans-serif; }
+}
+
+html, body { background: #fff !important; }
+* { color: #000 !important; background: transparent !important; box-shadow: none !important; }
+body { font-size: 11pt; }
+
+/* Hide the nav, the banner (the print header carries staleness), controls and screen-only bits. */
+.site-header, .stale-banner, nav, #live-region, .no-print, .window-picker, .phone-note, .live-notice,
+button, .drill-toggle, .col-dispute, .job-list-row, .drill-row, .loading-row, .sparkline, .col-trend,
+.freshness-notice { display: none !important; }
+
+main { padding: 0 !important; max-width: none !important; }
+a { text-decoration: none; }
+
+/* Tables: black rules, legible without colour. */
+table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+th, td { border-bottom: 0.75pt solid #000 !important; padding: 3pt 5pt; }
+caption { font-weight: 600; text-align: left; padding: 6pt 0 3pt; }
+thead { display: table-header-group; }
+tfoot th, tfoot td { border-top: 1.5pt solid #000 !important; font-weight: 600; }
+.badge, .stale-tag { border: 0.75pt solid #000 !important; }
+.is-stale, .is-stale td { color: #000 !important; }
+
+/* Print sheet (D20) */
+.print-head h1 { font-size: 16pt; margin: 0 0 4pt; }
+.print-head p { margin: 0 0 2pt; }
+.print-freshness { margin: 4pt 0 8pt; }
+.print-stale { border: 2pt solid #000; padding: 3pt 6pt; display: inline-block; font-size: 13pt; }
+.gate1-notice { font-size: 9.5pt; font-weight: 600; }
+.print-station { break-inside: avoid; page-break-inside: avoid; margin-top: 10pt; }
+.print-station + .print-station { break-before: auto; }
+.print-station h2 { font-size: 13pt; margin: 0 0 2pt; }
+.print-group { break-inside: avoid; page-break-inside: avoid; }
+.correction { width: 30%; border-left: 0.75pt solid #000 !important; }
+.print-total { margin: 2pt 0 0; }
+/* The footer repeats on every page via @page margin boxes (with page X of Y); this in-flow copy ends the
+   sheet so the words still print where a browser has no margin-box support. */
+.print-foot { margin-top: 10pt; font-size: 9pt; }
