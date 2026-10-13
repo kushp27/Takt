@@ -1,0 +1,7 @@
+{% comment %}After a dispute is submitted: replaces the job-list form, and swaps the "My disputes" strip out of band.
+takt.js moves focus to this heading and announces "Dispute submitted" (design D18).{% endcomment %}<div class="dispute-done">
+  <h4 class="panel-heading" tabindex="-1" data-takt-focus-here>Dispute submitted</h4>
+  <p>{{ count }} job{{ count|pluralize }} sent to the area supervisor. The decision and note show under My disputes.</p>
+  <button type="button" class="button-link" data-takt-cancel>Close</button>
+</div>
+{% include "web/partials/my_disputes.html" %}

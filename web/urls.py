@@ -6,7 +6,7 @@ from django.urls import path
 from disputes import views as dispute_views
 
 from . import views
-from .screens import area, line_health
+from .screens import area, line_health, my_shift
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -22,4 +22,11 @@ urlpatterns = [
     path("area/<int:area_id>/disputes/<int:dispute_id>/", dispute_views.dispute_detail, name="dispute_detail"),
     path("area/<int:area_id>/disputes/<int:dispute_id>/decide/", dispute_views.dispute_decide,
          name="dispute_decide"),
+    # My Shift (lead's home), its partials and the print sheet
+    path("shift/", my_shift.my_shift_home, name="my_shift_home"),
+    path("area/<int:area_id>/shift/", my_shift.my_shift, name="my_shift"),
+    path("area/<int:area_id>/shift/table/", my_shift.my_shift_table, name="my_shift_table"),
+    path("area/<int:area_id>/shift/jobs/<int:alias_id>/", my_shift.my_shift_jobs, name="my_shift_jobs"),
+    path("area/<int:area_id>/shift/disputes/", my_shift.my_shift_dispute, name="my_shift_dispute"),
+    path("area/<int:area_id>/shift/print/", my_shift.print_sheet, name="print_sheet"),
 ]

@@ -1,0 +1,21 @@
+{% extends "web/base.html" %}{% load operator takt_freshness %}
+{% comment %}My Shift (design Component 6): the lead's home, replacing the sticky note. The live notice sits in its
+own container, outside the table and every form (eng re-review D5). "My disputes" comes first (D14), then
+#shift-table, the region Refresh swaps.{% endcomment %}
+{% block title %}My Shift{% endblock %}
+{% block content %}
+<div class="screen" {% page_hx_vals %}>
+  <div class="page-head">
+    <h1>My Shift · {{ area.name }}</h1>
+    <p class="window-label">{{ window.label }}</p>
+    <p class="no-print"><a href="{{ print_url }}">Print sheet</a></p>
+  </div>
+  {% include "web/partials/window_picker.html" %}
+  <div class="live-notice no-print">{% freshness_notice hub refresh_url=refresh_url refresh_target=refresh_target %}</div>
+  <p class="phone-note">Open on a desktop to dispute or drill down.</p>
+  {% gate1_notice %}
+  {% include "web/partials/my_disputes.html" %}
+  {% if no_shift %}{% include "partials/states/no_shift.html" with last_shift_url=no_shift.last_shift_url fourteen_day_url=no_shift.fourteen_day_url %}{% endif %}
+  {% include "web/partials/shift_table.html" %}
+</div>
+{% endblock %}

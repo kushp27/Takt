@@ -72,6 +72,48 @@ SWEEP_CASES = [
         partial=True,
         parent="area",
     ),
+    # My Shift (lead's home), its Refresh fragment, the job list, the dispute POST, the print sheet.
+    SweepCase(
+        "my_shift",
+        kwargs=lambda w: {"area_id": w.area_in.pk},
+        query=lambda w: {"shift_id": w.shift_1st.pk, "date": w.today.isoformat()},
+        shift="shift_1st",
+    ),
+    SweepCase(
+        "my_shift_table",
+        kwargs=lambda w: {"area_id": w.area_in.pk},
+        query=lambda w: {"shift_id": w.shift_1st.pk, "date": w.today.isoformat()},
+        shift="shift_1st",
+        partial=True,
+        parent="my_shift",
+    ),
+    SweepCase(
+        "my_shift_jobs",
+        kwargs=lambda w: {"area_id": w.area_in.pk, "alias_id": w.ops["zeb"].alias.pk},
+        query=lambda w: {"shift_id": w.shift_1st.pk, "date": w.today.isoformat()},
+        expected=lambda w: {"zeb"},
+        shift="shift_1st",
+        partial=True,
+        parent="my_shift",
+    ),
+    SweepCase(
+        "my_shift_dispute",
+        kwargs=lambda w: {"area_id": w.area_in.pk},
+        method="post",
+        data=lambda w: {"shift_id": w.shift_1st.pk, "date": w.today.isoformat(),
+                        "alias_id": w.ops["zeb"].alias.pk,
+                        "job": [w.ops["zeb"].alias.jobs.order_by("pk").last().pk], "reason": "wrong_quantity"},
+        expected=lambda w: {"zeb"},
+        shift="shift_1st",
+        partial=True,
+        parent="my_shift",
+    ),
+    SweepCase(
+        "print_sheet",
+        kwargs=lambda w: {"area_id": w.area_in.pk},
+        query=lambda w: {"shift_id": w.shift_1st.pk, "date": w.today.isoformat()},
+        shift="shift_1st",
+    ),
     # Dispute queue (supervisor): leads raise disputes on My Shift but never decide them.
     SweepCase(
         "dispute_queue",

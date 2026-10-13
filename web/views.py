@@ -31,7 +31,9 @@ def home(request):
             return redirect("area", area_id=area.pk)
         return _home_page(request, "No area is assigned to you yet. Ask the Takt builder to add one.")
     if role == Profile.LEAD:
-        return _home_page(request, "Your screen is not built yet.")
+        if role_scope.lead_assignment(request.user) is not None:
+            return redirect("my_shift_home")
+        return _home_page(request, "No area and shift are assigned to you yet. Ask the Takt builder to add them.")
     return _home_page(request, "Your account has no Takt role yet. Ask the Takt builder to set one.")
 
 
