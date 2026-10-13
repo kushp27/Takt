@@ -1,0 +1,2 @@
+/* Print stylesheet (design D20). Loaded with media="print" on every page: it hides the nav. */
+.site-header, .stale-banner, nav, #live-region { display: none !important; }

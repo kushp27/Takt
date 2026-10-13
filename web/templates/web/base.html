@@ -6,6 +6,8 @@
   <title>{% block title %}Takt{% endblock %} · Takt</title>
   <link rel="icon" href="{% static 'img/tuktuk.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'css/screens.css' %}">
+  <link rel="stylesheet" href="{% static 'css/print.css' %}" media="print">
   {% block extra_head %}{% endblock %}
   <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
   <script src="{% static 'ops/freshness.js' %}" defer></script>
