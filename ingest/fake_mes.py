@@ -465,7 +465,7 @@ def tick(now=None):
         state = conn.execute(f"SELECT hub_code, seed, load_end, generated_through FROM {STATE_TABLE}").fetchall()
         for hub_code, seed, load_end, through in state:
             hub = Hub.objects.filter(code=hub_code).first()
-            if hub is None or now <= through:
+            if hub is None or hub.adapter != Hub.ADAPTER_FIXTURE or now <= through:  # never touch a real hub
                 continue
             tz = ZoneInfo(hub.plant_timezone)
             oldest_open = conn.execute(
