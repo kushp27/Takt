@@ -306,3 +306,18 @@ def test_free_text_never_reaches_the_job_list(p, client):
     assert "Ask Nerissa" not in jl and "Talked to Mortimer" not in jl
     assert "Ask Nerissa" not in html and "Talked to Mortimer" not in html  # not in someone else's strip
     assert "Don&#x27;t name operators." in jl or "Don't name operators." in jl
+
+
+def test_stale_hub_marks_my_shift_tables_and_strip_has_phone_labels(p, client, monkeypatch):
+    """D9 on My Shift's operator tables: the word "stale" plus muted values, keyed on the station's hub."""
+    html = _page(client, p, p["users"]["builder"])
+    assert '<table class="data operators " id=' in html and "stale-tag" not in html.split('id="shift-table"')[1]
+    p["hub"].last_new_transaction_at = p["now"] - timedelta(minutes=45)
+    p["hub"].save()
+    html = _page(client, p, p["users"]["builder"])
+    tables = re.findall(r'<table class="data operators is-stale" id="group-[^"]+">\s*<caption>(.*?)</caption>', html, re.S)
+    assert len(tables) == 2 and all(">stale</span>" in c for c in tables)
+    [d] = service.submit(p["users"]["builder"], p["jobs"]["new"][:1], Dispute.WRONG_QUANTITY)
+    strip = re.search(r'<section id="my-disputes".*?</section>', _page(client, p, p["users"]["builder"]), re.S).group(0)
+    for label in ("Job", "Station and part", "Operator", "Reason", "Status", "Supervisor's note"):
+        assert f'data-label="{label}"' in strip.replace("&#x27;", "'"), label

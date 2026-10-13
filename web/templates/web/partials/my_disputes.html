@@ -11,12 +11,12 @@ Open / Confirmed / Rejected with the supervisor's note, grouped by submission (o
     {% for sub in my_disputes %}
     <tbody>{% operators_sorted sub "job.alias" as rows %}{% for d in rows %}
       <tr>
-        <th scope="row" class="mono">{{ d.job.mes_id }}</th>
-        <td>{{ d.job.station.name }} · part {{ d.job.part.hub_part_code }}</td>
-        <td>{% operator d.job.alias %}</td>
-        <td>{{ d.get_reason_display }}{% if d.reason_text %}: {{ d.reason_text }}{% endif %}</td>
-        <td><span class="status-{{ d.status }}">{{ d.get_status_display }}</span></td>
-        <td>{% if d.note %}{{ d.note }}{% if d.decided_by %} ({{ d.decided_by|user_short }}){% endif %}{% else %}—{% endif %}</td>
+        <th scope="row" class="mono" data-label="Job">{{ d.job.mes_id }}</th>
+        <td data-label="Station and part">{{ d.job.station.name }} · part {{ d.job.part.hub_part_code }}</td>
+        <td data-label="Operator">{% operator d.job.alias %}</td>
+        <td data-label="Reason">{{ d.get_reason_display }}{% if d.reason_text %}: {{ d.reason_text }}{% endif %}</td>
+        <td data-label="Status"><span class="status-{{ d.status }}">{{ d.get_status_display }}</span></td>
+        <td data-label="Supervisor's note">{% if d.note %}{{ d.note }}{% if d.decided_by %} ({{ d.decided_by|user_short }}){% endif %}{% else %}—{% endif %}</td>
       </tr>{% endfor %}
     </tbody>
     {% endfor %}

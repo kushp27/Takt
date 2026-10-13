@@ -1,4 +1,4 @@
-{% extends "web/base.html" %}{% load operator %}
+{% extends "web/base.html" %}{% load operator takt_freshness %}
 {% comment %}Area (design Component 6, D7): open-disputes strip (only when disputes are open), the area's Line
 Health rows, then the 3-shift comparison. The header carries the open-dispute count badge (eng review D6).{% endcomment %}
 {% block title %}{{ area.name }}{% endblock %}
@@ -25,14 +25,14 @@ Health rows, then the 3-shift comparison. The header carries the open-dispute co
 
   {% if comparison %}
   <h2 class="section-title" id="shift-comparison-h">Shift comparison</h2>
-  <table class="data shift-comparison" aria-labelledby="shift-comparison-h">
+  <table class="data shift-comparison">
     <caption>Pace and yield by shift, {{ comparison_date|date:"D M j" }}</caption>
     <thead>
       <tr><th scope="col">Line</th>{% for n in comparison_names %}<th scope="col">{{ n }} shift pace</th><th scope="col">{{ n }} shift yield</th>{% endfor %}</tr>
     </thead>
     <tbody>
     {% for line, cells in comparison %}
-      <tr><th scope="row">{{ line.name }}</th>{% for c in cells %}{% if c %}<td title="{{ c.pace.tooltip }}">{{ c.pace.throughput_display }}</td><td>{{ c.yield_.display }}</td>{% else %}<td>—</td><td>—</td>{% endif %}{% endfor %}</tr>
+      <tr class="{% stale_class line.hub %}"><th scope="row">{{ line.name }} {% stale_tag line.hub %}</th>{% for n, c, live in cells %}{% if c %}<td title="{{ c.pace.tooltip }}" data-label="{{ n }} shift pace">{{ c.pace.throughput_display }}{% if live %} <span class="live-tag">(live)</span>{% endif %}</td><td data-label="{{ n }} shift yield">{{ c.yield_.display }}{% if live %} <span class="live-tag">(live)</span>{% endif %}</td>{% else %}<td data-label="{{ n }} shift pace">—</td><td data-label="{{ n }} shift yield">—</td>{% endif %}{% endfor %}</tr>
     {% endfor %}
     </tbody>
   </table>

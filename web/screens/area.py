@@ -58,7 +58,10 @@ def area(request, area_id):
 
 
 def _comparison(lines, production_date, only=None):
-    """3-shift table (D7): (shift names in start order, [(line, [ShiftCell or None per name])])."""
+    """3-shift table (D7): (shift names in start order, [(line, [(name, ShiftCell or None, live)])]).
+
+    The doc doesn't say which shifts to compare: the shifts that start on one production date (the
+    window's). A shift still running is marked "(live)": its numbers are so far, not final."""
     if not lines:
         return [], []
     rows = api.shift_comparison(lines, production_date)
@@ -67,8 +70,15 @@ def _comparison(lines, production_date, only=None):
         for c in row.shifts:
             if c.shift_name not in names and (only is None or c.shift_name == only):
                 names.append(c.shift_name)
+    running = {}
+    for row in rows:
+        hub = row.line.hub
+        if hub.pk not in running:
+            w = windows.current_window(hub)
+            running[hub.pk] = (w.shift.name, w.production_date) if w else None
     out = []
     for row in rows:
         by_name = {c.shift_name: c for c in row.shifts}
-        out.append((row.line, [by_name.get(n) for n in names]))
+        live = running.get(row.line.hub_id)
+        out.append((row.line, [(n, by_name.get(n), live == (n, production_date)) for n in names]))
     return names, out

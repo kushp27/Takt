@@ -241,3 +241,19 @@ def test_t7_dispute_badge_confirm_exclusion(p, client):
     from django.core import mail
 
     assert mail.outbox == []
+
+
+def test_comparison_marks_the_running_shift_live_and_stale_rows(p, client, monkeypatch):
+    """Review items 8-10: the shift still running reads "(live)"; a stale hub's row carries the word
+    "stale" and is muted (D9); every cell has a phone label (D19)."""
+    html = _area(client, p, p["users"]["supervisor"]).content.decode()  # Tue 16:00: 2nd shift running
+    table = re.search(r'<table class="data shift-comparison".*?</table>', html, re.S).group(0)
+    assert table.count("(live)") == 2  # 2nd shift pace and yield
+    assert re.search(r'data-label="2nd shift pace">[^<]*<span class="live-tag">\(live\)</span>', table)
+    assert 'data-label="1st shift pace"' in table and 'data-label="3rd shift yield"' in table
+    assert "stale" not in table
+    p["hub"].last_new_transaction_at = t(p["hub"], 14, 0)
+    p["hub"].save()
+    html = _area(client, p, p["users"]["supervisor"]).content.decode()
+    table = re.search(r'<table class="data shift-comparison".*?</table>', html, re.S).group(0)
+    assert '<tr class="is-stale"><th scope="row">Cores Line 1 <span class="stale-tag"' in table
