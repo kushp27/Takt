@@ -91,3 +91,33 @@ p.htmx-request.htmx-indicator, .htmx-request p.htmx-indicator { display: block; 
 .print-foot { margin-top: var(--s5); color: var(--text-2); font-size: var(--size-table); }
 .correction { min-width: 8rem; }
 
+/* ---- Phone (design review D19): below 640px every table row becomes a stacked block: the status word and
+   sentence on top, then "Label: value" pairs (Pace, Yield, Bottleneck). No sparkline, no dispute or
+   drill-down controls; a note says "Open on a desktop to dispute or drill down." 16px gutters, nothing
+   wider than the screen, so there is no horizontal scroll. Phones are read-only (D15). */
+.line-name-text { display: none; }
+@media (max-width: 639.98px) {
+  body { overflow-wrap: anywhere; }
+  main { padding: var(--s4); max-width: 100%; box-sizing: border-box; }
+  .site-header { padding: var(--s3) var(--s4); }
+  .stale-banner { padding: var(--s2) var(--s4); }
+  img, svg, table, input, select, textarea { max-width: 100%; }
+
+  table, caption, thead, tbody, tfoot, tr, th, td { display: block; width: auto; text-align: left; }
+  table { margin: 0 0 var(--s4); }
+  thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  th, td { border-bottom: 0; padding: var(--s1) 0; }
+  tbody, .data tbody tr { border-bottom: 1px solid var(--line); padding: var(--s2) 0; }
+  td.num, th.num { text-align: left; }
+  td[data-label]::before { content: attr(data-label) ": "; color: var(--text-2); }
+  .line-health td[data-label]::before { content: none; }
+  .line-health .evidence-label { display: inline; color: var(--text-2); }
+  .line-health tbody.line-row th[scope="rowgroup"] { width: auto; font-size: var(--size-body); }
+  .line-name-text { display: inline; }
+
+  .sparkline, .col-trend, .drill-row, .loading-row, .job-list-row, .detail-row, .col-dispute,
+  .drill-toggle, .dispute-toggle, .excluded-link { display: none !important; }
+  .phone-note { display: block; color: var(--text-2); margin: 0 0 var(--s4); }
+  .window-picker { flex-direction: column; align-items: stretch; }
+  .page-head { flex-direction: column; align-items: flex-start; }
+}
