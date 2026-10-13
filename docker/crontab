@@ -1,6 +1,8 @@
 # Times are plant local time (the scheduler container's TZ, from TAKT_PLANT_TZ).
-# Ingest every 5 minutes: trailing 48 h plus every still-open job (eng review D3, D9).
-*/5 * * * * python manage.py ingest
+# Every 5 minutes: the demo's synthetic MES ticks forward (a no-op unless TAKT_FIXTURE_LIVE=true),
+# then ingest: trailing 48 h plus every still-open job (eng review D3, D9). One line so the
+# tick always finishes before ingest starts.
+*/5 * * * * python manage.py fixture_tick; python manage.py ingest
 # Nightly 7-day re-read at 02:00 plant time (eng review D9).
 0 2 * * * python manage.py ingest --nightly
 # Trust grade and count-trust revocation after the nightly re-read (Components 4, 4a).

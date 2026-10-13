@@ -104,6 +104,56 @@ def stamp(hub, instant):
     return w.shift, w.production_date
 
 
+class ShiftStamper:
+    """Cached, bulk-friendly equivalent of `stamp()` / `window_at()` for one hub.
+
+    Ingest and restamp_shifts stamp thousands of rows; `stamp()` re-queries the shift
+    calendar per call. This loads the hub's active shifts, breaks and non-working days
+    once and caches windows per production date. Same rules, same answers as `stamp()`.
+    """
+
+    def __init__(self, hub):
+        self.hub = hub
+        self.tz = ZoneInfo(hub.plant_timezone)
+        self.shifts = list(
+            Shift.objects.filter(hub=hub, active=True).prefetch_related("breaks").select_related("hub")
+        )
+        self.non_working = set(NonWorkingDay.objects.filter(hub=hub).values_list("date", flat=True))
+        self._by_date = {}
+        self._by_key = {}
+
+    def windows_on(self, production_date):
+        if production_date not in self._by_date:
+            self._by_date[production_date] = sorted(
+                (window_for(s, production_date) for s in self.shifts
+                 if is_scheduled(s, production_date, self.non_working)),
+                key=lambda w: w.start,
+            )
+        return self._by_date[production_date]
+
+    def window(self, shift_id, production_date):
+        """The window of a stamped (shift_id, production_date), scheduled or not; None if shift unknown."""
+        key = (shift_id, production_date)
+        if key not in self._by_key:
+            shift = next((s for s in self.shifts if s.pk == shift_id), None)
+            self._by_key[key] = window_for(shift, production_date) if shift else None
+        return self._by_key[key]
+
+    def window_at(self, instant):
+        d = instant.astimezone(self.tz).date()
+        for day in (d - timedelta(days=1), d):
+            for w in self.windows_on(day):
+                if w.contains(instant):
+                    return w
+        return None
+
+    def stamp(self, instant):
+        w = self.window_at(instant)
+        if w is None:
+            return None, instant.astimezone(self.tz).date()
+        return w.shift, w.production_date
+
+
 def last_completed_window(hub, now):
     """The most recent scheduled window that has ended by `now`, looking back up to 14 days."""
     d = local_date(hub, now)
@@ -116,5 +166,5 @@ def last_completed_window(hub, now):
 
 __all__ = [
     "ShiftWindow", "window_for", "windows_on", "window_at", "stamp", "is_scheduled",
-    "local_date", "last_completed_window",
+    "local_date", "last_completed_window", "ShiftStamper",
 ]

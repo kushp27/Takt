@@ -1,7 +1,37 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.utils import timezone
 
 from . import models
+
+
+MAX_LISTED = 10
+
+
+def warn_missing_demand(request):
+    """Eng review D7 (T5): a missing TaktConfig row raises a red (messages.ERROR) warning in the
+    admin, on the TaktConfig list and the admin index. Pace for that family adds 0 units required
+    and Line Health names it "no demand set"."""
+    from metrics.api import missing_demand
+
+    gaps = missing_demand(include_zero=False)
+    if gaps:
+        listed = "; ".join(f"{g.line} · {g.family} · {g.production_date:%a %b} {g.production_date.day}"
+                           for g in gaps[:MAX_LISTED])
+        more = f" and {len(gaps) - MAX_LISTED} more" if len(gaps) > MAX_LISTED else ""
+        messages.error(request, f"No demand set: {len(gaps)} scheduled family-day(s) in the last and next 7 "
+                                f"days have no demand row, so they add no units required: {listed}{more}.")
+    return gaps
+
+
+_admin_index = admin.site.index
+
+
+def _index_with_demand_warning(request, extra_context=None):
+    warn_missing_demand(request)
+    return _admin_index(request, extra_context)
+
+
+admin.site.index = _index_with_demand_warning
 
 
 @admin.register(models.Hub)
@@ -95,6 +125,10 @@ class TaktConfigAdmin(admin.ModelAdmin):
     list_filter = ["line", "family"]
     date_hierarchy = "production_date"
 
+    def changelist_view(self, request, extra_context=None):
+        warn_missing_demand(request)
+        return super().changelist_view(request, extra_context)
+
 
 @admin.register(models.ScrapCode)
 class ScrapCodeAdmin(admin.ModelAdmin):
@@ -109,7 +143,7 @@ class StationPartGradeAdmin(admin.ModelAdmin):
 
 @admin.register(models.IngestRun)
 class IngestRunAdmin(admin.ModelAdmin):
-    list_display = ["hub", "mode", "started_at", "ok", "rows_read", "rows_changed", "open_jobs_reread", "query_seconds"]
+    list_display = ["hub", "mode", "started_at", "ok", "rows_read", "rows_changed", "open_jobs_reread", "rows_skipped", "query_seconds"]
     list_filter = ["hub", "mode", "ok"]
 
 

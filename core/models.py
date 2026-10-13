@@ -372,7 +372,9 @@ class IngestRun(models.Model):
 
     INCREMENTAL = "incremental"
     NIGHTLY = "nightly"
-    MODE_CHOICES = [(INCREMENTAL, "Incremental (48 h)"), (NIGHTLY, "Nightly (7 days)")]
+    BACKFILL = "backfill"
+    MODE_CHOICES = [(INCREMENTAL, "Incremental (48 h)"), (NIGHTLY, "Nightly (7 days)"),
+                    (BACKFILL, "Backfill (ingest --days N)")]
 
     hub = models.ForeignKey(Hub, on_delete=models.CASCADE, related_name="ingest_runs")
     mode = models.CharField(max_length=12, choices=MODE_CHOICES)
@@ -382,7 +384,11 @@ class IngestRun(models.Model):
     rows_read = models.PositiveIntegerField(default=0)
     rows_changed = models.PositiveIntegerField(default=0)
     open_jobs_reread = models.PositiveIntegerField(default=0)
+    lookback_hours = models.FloatField(null=True, blank=True, help_text="How far back this run re-read.")
     query_seconds = models.FloatField(default=0)
+    # Rows with a station or part code Takt does not know: logged and counted, never silently dropped.
+    rows_skipped = models.PositiveIntegerField(default=0)
+    skipped_detail = models.TextField(blank=True, help_text="Unknown codes and how many rows each skipped.")
     error = models.TextField(blank=True)
 
     class Meta:
@@ -421,6 +427,10 @@ class SiteSettings(models.Model):
     stale_after_minutes = models.PositiveIntegerField(default=30)
     upstream_gap_minutes = models.PositiveIntegerField(default=15)
     tenure_flag_days = models.PositiveIntegerField(default=90)
+    # Line Health classification (Component 6): a flat 14-day baseline must not make every
+    # wobble "low" or "high". The SD used for the ±1 SD band is at least this many points.
+    pace_sd_floor_pts = models.FloatField(default=2.0, help_text="Minimum SD, in percentage points, for pace.")
+    yield_sd_floor_pts = models.FloatField(default=0.5, help_text="Minimum SD, in percentage points, for yield.")
 
     class Meta:
         verbose_name = "site settings"
