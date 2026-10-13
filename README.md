@@ -9,7 +9,8 @@ jobs. Three containers: `web`, `scheduler`, `postgres`.
 ## Run it
 
 ```sh
-cp .env.example .env        # edit secrets
+cp .env.example .env        # then set DJANGO_SECRET_KEY: web refuses to start with the placeholder
+                            # python -c 'import secrets; print(secrets.token_urlsafe(50))'
 docker compose up --build   # web on http://localhost:8000
 ```
 

@@ -190,5 +190,25 @@ def test_htmx_refusal_is_an_inline_d13_fragment(w):
 def test_base_template_swaps_403_fragments_and_shows_load_errors(client, w):
     client.force_login(w.users["sup_in"])
     body = client.get("/").content.decode()
-    assert "htmx:beforeSwap" in body and "status === 403" in body
+    assert "htmx:beforeSwap" in body and "status === 403" in body and 'getResponseHeader("X-Takt-Inline")' in body
     assert "htmx:responseError" in body and "Couldn't load stations." in body and "Retry" in body
+
+
+def test_inline_403_carries_the_swap_marker_and_full_page_does_not(w):
+    r = _req(w.users["sup_out"])
+    r.META["HTTP_HX_REQUEST"] = "true"
+    assert _shift_view(r, area_id=w.area_in.pk)["X-Takt-Inline"] == "out-of-scope"
+
+
+def test_rejected_token_rolls_back_writes_made_before_page_context(w):
+    from accounts.policy import PageTokenRejected
+    from core.models import Area
+
+    @operator_bearing
+    def writes_then_rejects(request):
+        Area.objects.create(name="written-before-reject")
+        raise PageTokenRejected()
+
+    resp = writes_then_rejects(_req(w.users["sup_in"]))
+    assert resp["HX-Refresh"] == "true"
+    assert not Area.objects.filter(name="written-before-reject").exists()

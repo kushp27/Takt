@@ -155,7 +155,11 @@ class OperatorScope:
 
 
 def token_expires_at(minted_at):
-    """Local midnight ending the production day the token was minted on, plus TOKEN_GRACE."""
+    """Midnight (display timezone, settings.TIME_ZONE) after the mint, plus TOKEN_GRACE.
+
+    Not the hub's production day; scope containment (bounded dates) is what stops a token
+    lettering another day's data, the expiry only bounds how long one page stays live.
+    """
     local = timezone.localtime(minted_at)
     next_midnight = (local + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     return next_midnight + TOKEN_GRACE

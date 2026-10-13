@@ -229,8 +229,9 @@ def check(world, case, role, gate1, resp, how=""):
             errs.append(f"{tag} expected {n_unmapped} 'Unmapped operator <letter>' labels, saw {sorted(seen_unmapped)}")
         # Rows must not follow name order (e.g. Operator.Meta.ordering = ["name"]): within each
         # table or list, letters appear in ascending order.
-        for block in BLOCK_RE.finditer(body):
-            seq = [letter for _, letter in LETTER_RE.findall(block.group(0))]
+        # A grouped table (My Shift: by station and part) sorts each <tbody> on its own.
+        for block in _order_blocks(body):
+            seq = [letter for _, letter in LETTER_RE.findall(block)]
             if [letter_key(x) for x in seq] != sorted(letter_key(x) for x in seq):
                 errs.append(f"{tag} letters out of order in a table/list: {seq} (name order leaking?)")
         if visible and not case.partial and GATE1_NOTICE not in body:
@@ -238,6 +239,16 @@ def check(world, case, role, gate1, resp, how=""):
     elif letters:
         errs.append(f"{tag} letters {letters} rendered in {mode} mode")
     return errs
+
+
+TBODY_RE = re.compile(r"<tbody\b.*?</tbody>", re.DOTALL | re.IGNORECASE)
+
+
+def _order_blocks(body):
+    for m in BLOCK_RE.finditer(body):
+        block = m.group(0)
+        bodies = TBODY_RE.findall(block) if m.group(1).lower() == "table" else []
+        yield from (bodies or [block])
 
 
 def extract_token(resp):
@@ -433,3 +444,10 @@ def test_harness_detects_a_leak_in_a_registered_view(world):
     assert any("'Operator #12'" in e for e in errs)
     assert any("'cores:ZQ-101'" in e for e in errs)
     assert any("not dense" in e for e in errs)
+
+    # A grouped table sorts each <tbody> on its own: that is not a leak, but out of order within one is.
+    Fake.content = (b"<table><tbody><tr><td>Operator B</td></tr><tr><td>Operator C</td></tr></tbody>"
+                    b"<tbody><tr><td>Operator A</td></tr><tr><td>Operator D</td></tr></tbody></table>")
+    assert not any("out of order" in e for e in check(world, case, "ops_manager", False, Fake(), "self-test"))
+    Fake.content = b"<table><tbody><tr><td>Operator D</td></tr><tr><td>Operator A</td></tr></tbody></table>"
+    assert any("out of order" in e for e in check(world, case, "ops_manager", False, Fake(), "self-test"))

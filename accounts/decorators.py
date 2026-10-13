@@ -14,6 +14,7 @@ For class-based views wrap the callable in urls.py: operator_bearing(MyView.as_v
 from functools import wraps
 
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import render
 
@@ -38,12 +39,15 @@ def render_out_of_scope(request, reason="area"):
     """
     is_admin = scope.role_of(request.user) == Profile.ADMIN
     template = OUT_OF_SCOPE_INLINE_TEMPLATE if request.headers.get("HX-Request") == "true" else OUT_OF_SCOPE_TEMPLATE
-    return render(
+    response = render(
         request,
         template,
         {"reason": reason, "is_admin_role": is_admin, "own_area_url": scope.own_area_url(request.user)},
         status=403,
     )
+    # base.html swaps in only 403s carrying this marker, never e.g. Django's CSRF failure page.
+    response["X-Takt-Inline"] = "out-of-scope"
+    return response
 
 
 def hx_refresh():
@@ -86,8 +90,11 @@ def operator_bearing(view):
     def wrapped(request, *args, **kwargs):
         if not scope.can_see_operator_metrics(request.user):
             return render_out_of_scope(request, reason="role")
+        # Atomic so a view that writes before page_context rejects its token commits nothing
+        # (eng re-review D5: an open dispute form must not lose work to an HX-Refresh).
         try:
-            return view(request, *args, **kwargs)
+            with transaction.atomic():
+                return view(request, *args, **kwargs)
         except PageTokenRejected:
             return hx_refresh()
 
