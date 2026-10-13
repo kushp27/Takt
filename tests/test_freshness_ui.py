@@ -133,8 +133,9 @@ def test_notice_is_204_without_newer_data(lead_client):
     assert lead_client.get(url).status_code == 204
 
 
-def test_notice_shows_new_data_with_refresh_after_ingest(lead_client):
+def test_notice_shows_new_data_with_refresh_after_ingest(lead_client, clock):
     cores, dies, now = _two_hubs()
+    clock(f.local(cores, 2026, 10, 12, 15, 0))  # same local day as the data, not the real clock
     _, url = _poller(cores, refresh_url="/shift/", refresh_target="#shift-table")
     cores.last_new_transaction_at = f.local(cores, 2026, 10, 12, 14, 45)
     cores.save()
@@ -191,8 +192,9 @@ def test_refresh_fragment_reset_restarts_polling_out_of_band():
     assert datetime.fromisoformat(parse_qs(urlsplit(url).query)["since"][0]) == cores.last_new_transaction_at
 
 
-def test_notice_time_uses_the_hubs_plant_timezone(lead_client):
+def test_notice_time_uses_the_hubs_plant_timezone(lead_client, clock):
     cores, dies, now = _two_hubs()
+    clock(f.local(cores, 2026, 10, 12, 15, 0))  # same local day as the data, not the real clock
     cores.plant_timezone = "America/New_York"
     cores.last_new_transaction_at = f.local(dies, 2026, 10, 12, 14, 45)  # 2:45 PM Chicago = 3:45 PM New York
     cores.save()
