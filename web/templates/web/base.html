@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
   {% block extra_head %}{% endblock %}
   <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
+  <script src="{% static 'ops/freshness.js' %}" defer></script>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
   <header class="site-header">
@@ -16,11 +17,11 @@
     <nav aria-label="Main">
       <ul>{% block nav %}{% endblock %}</ul>
     </nav>
-    <div class="freshness">{% block freshness %}{% endblock %}</div>
+    <div class="freshness">{% block freshness %}{% include "ops/partials/freshness_header.html" %}{% endblock %}</div>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form>
     {% endif %}
   </header>
-  {% block banner %}{% endblock %}
+  {% block banner %}{% if user.is_authenticated %}{% include "ops/partials/stale_banner.html" %}{% endif %}{% endblock %}
   <main id="main">
     {% block content %}{% endblock %}
   </main>
