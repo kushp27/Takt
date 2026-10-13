@@ -9,7 +9,7 @@ One queue row (design review D8) and the row under it that the inline expand loa
     <td data-label="Operator">{% operator job.alias %}</td>
     <td data-label="Raised by">{{ d.raised_by|user_short }}</td>
     <td data-label="Reason">{{ d.get_reason_display }}{% if d.reason_text %}: {{ d.reason_text }}{% endif %}</td>
-    <td class="col-dispute" data-label="Decision">{% if d.status == "open" %}<button type="button" class="button-link drill-toggle" hx-get="{% url 'dispute_detail' area.pk d.pk %}" hx-target="#dispute-{{ d.pk }}-detail" aria-expanded="false" aria-controls="dispute-{{ d.pk }}-detail" data-load-error="Couldn't load the job." data-takt-loaded="Job loaded">Review<span class="visually-hidden"> job {{ job.mes_id }}</span></button>{% else %}<span class="status-{{ d.status }}">{{ d.get_status_display }}</span> by {{ d.decided_by|user_short }}: {{ d.note }}{% endif %}</td>
+    <td class="col-dispute" data-label="Decision">{% if d.status == "open" %}<button type="button" class="button-link drill-toggle" data-takt-drill="dispute" hx-get="{% url 'dispute_detail' area.pk d.pk %}" hx-target="#dispute-{{ d.pk }}-detail" aria-expanded="false" aria-controls="dispute-{{ d.pk }}-detail" data-load-error="Couldn't load the job." data-takt-loaded="Job loaded">Review<span class="visually-hidden"> job {{ job.mes_id }}</span></button>{% else %}<span class="status-{{ d.status }}">{{ d.get_status_display }}</span> by {{ d.decided_by|user_short }}: {{ d.note }}{% endif %}</td>
   </tr>
 {% if not only_main %}
   <tr class="detail-row" id="dispute-{{ d.pk }}-detail-row"{% if oob %} hx-swap-oob="outerHTML"{% endif %}><td colspan="7"><div class="drill" id="dispute-{{ d.pk }}-detail"></div></td></tr>{% endif %}{% endwith %}

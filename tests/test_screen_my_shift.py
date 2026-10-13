@@ -127,12 +127,12 @@ def _jobs_url(p, key, html, user=None):
 
 def test_this_looks_wrong_opens_the_job_list(p, client):
     html = _page(client, p, p["users"]["lead"])
-    assert re.search(r'<button type="button" class="button-link drill-toggle dispute-toggle" hx-get="'
+    assert re.search(r'<button type="button" class="button-link drill-toggle dispute-toggle" data-takt-drill="jobs" hx-get="'
                      + re.escape(_jobs_url(p, "new", html)) + r'\?date=2026-09-15&amp;shift_id=\d+"', html)
     resp = client.get(_jobs_url(p, "new", html), {"shift_id": p["first"].pk, "date": "2026-09-15",
                                             TOKEN_PARAM: _token(html)}, HTTP_HX_REQUEST="true")
     jl = resp.content.decode()
-    assert re.search(r'<form class="dispute-form job-list" data-takt-form method="post" hx-post="/area/\d+/shift/disputes/"', jl)
+    assert re.search(r'<form class="dispute-form job-list" data-takt-form data-job-list method="post" hx-post="/area/\d+/shift/disputes/"', jl)
     assert jl.count('type="checkbox" name="job"') == 2
     for label in ("Wrong quantity", "Wrong operator", "Job not mine", "Time looks wrong", "Other"):
         assert f">{label}</label>" in jl
@@ -225,7 +225,7 @@ def test_e_t4_live_notice_wiring_with_an_open_dispute_form(p, client):
     # open a dispute form: it is marked data-takt-form and lives inside #shift-table (the Refresh target)
     jl = client.get(_jobs_url(p, "new", html), {"shift_id": p["first"].pk, "date": "2026-09-15",
                                           TOKEN_PARAM: _token(html)}, HTTP_HX_REQUEST="true").content.decode()
-    assert "<form class=\"dispute-form job-list\" data-takt-form" in jl
+    assert "<form class=\"dispute-form job-list\" data-takt-form data-job-list" in jl
     table = re.search(r'<section id="shift-table".*', html, re.S).group(0)
     assert 'id="jobs-' in table  # the job list container the form loads into is inside the Refresh target
     js = open("ops/static/ops/freshness.js").read()

@@ -14,7 +14,7 @@ The line name is a real button that drills down to stations (D18); "Loading stat
   <tbody class="line-row {% stale_class row.line.hub %}" id="line-{{ pk }}">
     <tr class="status-row">
       <td class="status-lead" rowspan="2">{% if row.status %}<span class="status-word {{ row.status_key|status_class }}">{{ row.status }}</span>{% endif %}</td>
-      <th scope="rowgroup" rowspan="2"><span class="line-name-text">{{ row.line.name }}</span><button type="button" class="button-link drill-toggle line-name" hx-get="{% url 'line_stations' pk %}?{{ window.query }}" hx-target="#drill-line-{{ pk }}" hx-indicator="#loading-line-{{ pk }}" aria-expanded="false" aria-controls="drill-line-{{ pk }}" data-load-error="Couldn't load stations." data-takt-loaded="Stations loaded">{{ row.line.name }}<span class="visually-hidden">: stations</span></button> {% stale_tag row.line.hub %}</th>
+      <th scope="rowgroup" rowspan="2"><span class="line-name-text">{{ row.line.name }}</span><button type="button" class="button-link drill-toggle line-name" data-takt-drill="stations" hx-get="{% url 'line_stations' pk %}?{{ window.query }}" hx-target="#drill-line-{{ pk }}" hx-indicator="#loading-line-{{ pk }}" aria-expanded="false" aria-controls="drill-line-{{ pk }}" data-load-error="Couldn't load stations." data-takt-loaded="Stations loaded">{{ row.line.name }}<span class="visually-hidden">: stations</span></button> {% stale_tag row.line.hub %}</th>
       <td colspan="4" class="status-cell"><span class="sentence">{{ row.sentence }}</span></td>
     </tr>
     <tr class="evidence-row">

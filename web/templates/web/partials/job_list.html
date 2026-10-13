@@ -6,7 +6,7 @@ data-takt-form, so the live Refresh never swaps over it (eng re-review D5). Cont
 area, shift, window, error, checked; person and ref (the opaque per-page
 reference from {% operator_ref %}, never a pk).
 {% endcomment %}{% with fid=ref %}
-<form class="dispute-form job-list" data-takt-form method="post" hx-post="{% url 'my_shift_dispute' area.pk %}" hx-target="this" hx-swap="outerHTML" aria-labelledby="jl-h-{{ fid }}">
+<form class="dispute-form job-list" data-takt-form data-job-list method="post" hx-post="{% url 'my_shift_dispute' area.pk %}" hx-target="this" hx-swap="outerHTML" aria-labelledby="jl-h-{{ fid }}">
   <input type="hidden" name="ref" value="{{ ref }}">
   <input type="hidden" name="shift_id" value="{{ shift.pk }}">
   <input type="hidden" name="date" value="{{ window.date_to.isoformat }}">

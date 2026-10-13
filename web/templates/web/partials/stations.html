@@ -27,7 +27,7 @@ only. A station that is not count-trusted shows "Counts unverified" instead of c
       <td>{% trust_badge p.cell.badge %}</td>
       <td colspan="2">{% if p.cell.show_counts %}{{ p.jobs }} job{{ p.jobs|pluralize }} · {{ p.quantity }} units{% else %}{{ p.cell.message }}{% endif %}</td>
       <td>{{ p.yield_.display }}</td>
-      <td>{% if p.cell.show_operator_rows %}<button type="button" class="button-link drill-toggle" hx-get="{% url 'station_operators' sid %}?{{ window.query }}&amp;part_id={{ p.part.pk }}" hx-target="#ops-{{ sid }}-{{ p.part.pk }}" hx-indicator="#loading-ops-{{ sid }}-{{ p.part.pk }}" aria-expanded="false" aria-controls="ops-{{ sid }}-{{ p.part.pk }}" data-load-error="Couldn't load operators." data-takt-loaded="Operators loaded">Operators<span class="visually-hidden"> at {{ s.station.name }}, part {{ p.part.hub_part_code }}</span></button>{% endif %}</td>
+      <td>{% if p.cell.show_operator_rows %}<button type="button" class="button-link drill-toggle" data-takt-drill="operators" hx-get="{% url 'station_operators' sid %}?{{ window.query }}&amp;part_id={{ p.part.pk }}" hx-target="#ops-{{ sid }}-{{ p.part.pk }}" hx-indicator="#loading-ops-{{ sid }}-{{ p.part.pk }}" aria-expanded="false" aria-controls="ops-{{ sid }}-{{ p.part.pk }}" data-load-error="Couldn't load operators." data-takt-loaded="Operators loaded">Operators<span class="visually-hidden"> at {{ s.station.name }}, part {{ p.part.hub_part_code }}</span></button>{% endif %}</td>
     </tr>
     {% with ind="loading-ops-"|add:key %}{% include "partials/states/loading.html" with noun="operators" colspan=6 indicator_id=ind %}{% endwith %}
     <tr class="drill-row"><td colspan="6"><div class="drill" id="ops-{{ sid }}-{{ p.part.pk }}"></div></td></tr>

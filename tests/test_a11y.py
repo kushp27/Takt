@@ -106,3 +106,16 @@ def test_status_word_is_text_and_controls_are_32px(p, client):
     assert "--control-min-height: 32px" in tokens and "min-height: var(--control-min-height)" in tokens
     screens = (BASE / "web/static/css/screens.css").read_text()
     assert ".button-link {" in screens and "min-height: var(--control-min-height)" in screens
+
+
+def test_stable_hooks_for_the_browser_checks(p, client):
+    """Review item 7: every JS behaviour has a stable selector the integration browser checks can drive."""
+    pages = _pages(client, p)
+    assert 'data-takt-drill="stations"' in pages["line_health"]
+    assert 'data-takt-drill="operators"' in pages["stations"]
+    assert 'data-takt-drill="jobs"' in pages["my_shift"]
+    assert 'data-takt-drill="dispute"' in pages["queue"]
+    assert "data-takt-form data-job-list" in pages["jobs"] and "data-takt-cancel" in pages["jobs"]
+    assert "data-takt-form data-dispute-form=" in pages["detail"] and "data-takt-cancel" in pages["detail"]
+    assert 'id="live-region"' in pages["line_health"] and 'id="nav-dispute-count"' in pages["queue"]
+    assert 'class="phone-note"' in pages["my_shift"] and 'class="print-sheet"' in pages["print"]

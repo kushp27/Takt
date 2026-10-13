@@ -66,7 +66,7 @@ def test_line_row_golden(p, client):
     assert f'<svg class="sparkline" role="img" aria-label="{row.trend_text}"' in body
     assert row.trend_text.startswith("Pace 14-day trend: ")
     # the line name is a real button that drills down (D18)
-    assert re.search(r'<button type="button" class="button-link drill-toggle line-name" hx-get="/line/\d+/stations/'
+    assert re.search(r'<button type="button" class="button-link drill-toggle line-name" data-takt-drill="stations" hx-get="/line/\d+/stations/'
                      r'\?date=2026-09-15" hx-target="#drill-line-\d+"', body)
 
 

@@ -3,7 +3,7 @@
 Refresh. Holds "worth a conversation" (D5: up to 3 names per green station-part group, each with its context
 reasons; listed A-Z, never ranked) and the table grouped by station and part (one <table>/<tbody> per group, A-Z
 rows, D6). Never plant-wide. Context: blocks, conversation, start, area, window.
-{% endcomment %}{# DEVIATION: the API picks up to 3 names per group by shortfall; the list shows them A-Z by the displayed label (D6: never ranked). #}<section id="shift-table" class="shift-table" aria-labelledby="shift-table-h">
+{% endcomment %}{# The API picks up to 3 names per group by shortfall; the list shows them A-Z by the displayed label: storyboard 6b step 2, "D5 list, D6 neutral order". #}<section id="shift-table" class="shift-table" aria-labelledby="shift-table-h">
   <h2 id="shift-table-h" class="section-title" tabindex="-1">Shift numbers · {{ window.label }}</h2>
   {% if start %}{% include "partials/states/start_of_shift.html" with shift_name=start.shift_name started=start.started last_sheet_url=start.last_sheet_url %}{% endif %}
   {% if conversation %}
