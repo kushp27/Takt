@@ -1,0 +1,5 @@
+{% comment %}Table 6a, D10: start of shift, zero jobs closed. Context: shift_name ("2nd"), started ("6:00 AM"),
+last_sheet_url (the last shift's print sheet, or "").{% endcomment %}<div class="state state-start-of-shift" role="status">
+  <p>{{ shift_name }} shift started {{ started }}. First jobs usually close within 20 minutes.</p>
+  {% if last_sheet_url %}<p><a href="{{ last_sheet_url }}">Last shift's sheet</a></p>{% endif %}
+</div>

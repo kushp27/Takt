@@ -1,0 +1,4 @@
+{% comment %}Table 6a, D10: no shift scheduled (from ShiftCalendar). Context: last_shift_url, fourteen_day_url.{% endcomment %}<div class="state state-no-shift" role="status">
+  <p>No shift scheduled today</p>
+  <p>{% if last_shift_url %}<a href="{{ last_shift_url }}">Last shift</a>{% endif %}{% if last_shift_url and fourteen_day_url %} · {% endif %}{% if fourteen_day_url %}<a href="{{ fourteen_day_url }}">14-day view</a>{% endif %}</p>
+</div>

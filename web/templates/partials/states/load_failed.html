@@ -1,0 +1,4 @@
+{% comment %}Table 6a, D13: drill-down fetch failed. An inline "Couldn't load stations. Retry" message with a
+retry control. base.html builds the same message in the browser when an htmx request fails (it reads the
+element's data-load-error, e.g. "Couldn't load stations."); this server-side copy is the template for the
+no-script case and the reference for the copy. Context: noun, retry_url.{% endcomment %}<p class="inline-error" role="alert">Couldn't load {{ noun|default:"stations" }}. {% if retry_url %}<a href="{{ retry_url }}">Retry</a>{% else %}Retry{% endif %}</p>

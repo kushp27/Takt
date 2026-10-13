@@ -1,0 +1,3 @@
+{% comment %}Table 6a, D9: stale data (one or both hubs). The full-width banner under the nav names the stale hub
+and its last good time; it is owned by ops and already in base.html, so this only re-uses it. Rows and values
+from that hub carry {% stale_tag hub %} and {% stale_class hub %} together (muted, not hidden).{% endcomment %}{% include "ops/partials/stale_banner.html" %}
