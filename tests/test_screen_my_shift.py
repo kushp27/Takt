@@ -287,3 +287,22 @@ def test_refresh_guard_runs_before_the_request_and_link_has_the_page_url(p, clie
 def test_no_live_notice_on_a_past_shift(p, client):
     html = _page(client, p, p["users"]["lead"], p["url"] + "&date=2026-09-14")
     assert "freshness-notice" not in html and "live-notice" not in html
+
+
+def test_free_text_never_reaches_the_job_list(p, client):
+    """Review item 6: reason text and notes stay with the raiser and the deciders; the job list shows the
+    reason label. Both free-text inputs say "Don't name operators."."""
+    lead = p["users"]["lead"]
+    [d] = service.submit(lead, p["jobs"]["new"][:1], Dispute.OTHER, "Ask Nerissa about this one")
+    service.decide(d, p["users"]["supervisor"], service.CONFIRM, "Talked to Mortimer.", affects_counts=False,
+                   now=p["now"])
+    assert m.Job.objects.get(pk=d.job_id).exclusion_reason == "other"
+    other_lead = p["users"]["builder"]  # someone else viewing the same shift
+    html = _page(client, p, other_lead)
+    jl = client.get(_jobs_url(p, "new", html, other_lead), {"shift_id": p["first"].pk, "date": "2026-09-15",
+                                                            TOKEN_PARAM: _token(html)}, HTTP_HX_REQUEST="true")
+    jl = jl.content.decode()
+    assert "Excluded: other, confirmed by J. Ortiz" in _text(jl)
+    assert "Ask Nerissa" not in jl and "Talked to Mortimer" not in jl
+    assert "Ask Nerissa" not in html and "Talked to Mortimer" not in html  # not in someone else's strip
+    assert "Don&#x27;t name operators." in jl or "Don't name operators." in jl

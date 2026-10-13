@@ -118,7 +118,7 @@ def test_submission_rules(plant):
         service.submit(plant["lead"], plant["jobs"][:2], Dispute.WRONG_QUANTITY)
     assert Dispute.objects.count() == 1  # all or nothing
     service.decide(row, plant["sup"], service.CONFIRM, "Torn label, recount 9.", now=_t(plant["hub"], 16))
-    assert m.Job.objects.get(pk=row.job_id).exclusion_reason == "label torn"
+    assert m.Job.objects.get(pk=row.job_id).exclusion_reason == "other"  # free text stays on the Dispute
     with pytest.raises(service.DisputeError, match="already been decided"):
         service.decide(row, plant["sup"], service.REJECT, "again")
 

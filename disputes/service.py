@@ -77,9 +77,9 @@ def submit(user, jobs, reason, reason_text=""):
 
 
 def exclusion_reason(dispute):
-    """The words shown after "Excluded:" (design review D23), e.g. "wrong quantity"."""
-    if dispute.reason == Dispute.OTHER and dispute.reason_text:
-        return dispute.reason_text[:200]
+    """The words shown after "Excluded:" (design review D23), e.g. "wrong quantity": always the reason's
+    label. Free text (reason_text, the note) stays on the Dispute, seen only by the raiser and the deciders,
+    so it never becomes an identity channel on the job everyone with the shift can see."""
     return dispute.get_reason_display().lower()
 
 

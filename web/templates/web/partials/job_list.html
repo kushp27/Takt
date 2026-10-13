@@ -35,7 +35,7 @@ reference from {% operator_ref %}, never a pk).
   <fieldset>
     <legend>What looks wrong?</legend>
     {% for value, label in reasons %}<div class="choice"><input type="radio" name="reason" value="{{ value }}" id="reason-{{ fid }}-{{ value }}"{% if value == posted_reason %} checked{% endif %} required><label for="reason-{{ fid }}-{{ value }}">{{ label }}</label></div>{% endfor %}
-    <p><label for="reason-text-{{ fid }}">If other, what looks wrong?</label><br><input type="text" name="reason_text" id="reason-text-{{ fid }}" maxlength="500" value="{{ posted_text }}"></p>
+    <p><label for="reason-text-{{ fid }}">If other, what looks wrong?</label><br><input type="text" name="reason_text" id="reason-text-{{ fid }}" maxlength="500" value="{{ posted_text }}" aria-describedby="reason-hint-{{ fid }}"><br><span class="subtle" id="reason-hint-{{ fid }}">Don't name operators.</span></p>
   </fieldset>
   {% endif %}
   <div class="actions">
