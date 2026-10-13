@@ -58,6 +58,7 @@ services:
       postgres:
         condition: service_healthy
       web:
+        # Keep service_started: never service_healthy. A stale hub makes /healthz 503, and ingest must still run to clear it.
         condition: service_started
 
 volumes:

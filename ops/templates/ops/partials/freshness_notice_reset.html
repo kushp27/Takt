@@ -1,0 +1,5 @@
+{% comment %}
+Out-of-band reset for the live notice (eng re-review D5). Include it in the fragment that Refresh
+swaps in: it clears "New data from …" and restarts polling with the new `since`, without touching
+anything else on the page (dispute forms stay as they are). Rendered by {% freshness_notice_reset hub ... %}.
+{% endcomment %}{% if poll_url %}<div id="freshness-notice-{{ hub_code }}" hx-swap-oob="innerHTML">{% include "ops/partials/freshness_poller.html" %}</div>{% endif %}
