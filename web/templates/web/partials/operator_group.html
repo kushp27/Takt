@@ -1,0 +1,49 @@
+{% load operator takt_ui %}{% comment %}
+One station-part group (design Component 6, matrix 4a, D6). Renders exactly what the matrix Cell allows:
+- count-trusted: jobs and quantity; rate vs median on green ("n/a" on amber / not graded yet, no rate column on
+  red); time with no transaction on green only; upstream output gap, tenure under 90 days and (My Shift) the
+  dispute button on every count-trusted row (user decision R3-5);
+- not count-trusted: no operator rows, only the cell's message ("Counts unverified, keep tally.").
+Rows are A-Z by the displayed label ({% operators_sorted %}: name order when named, letter order when
+lettered), never by rate; no column is sortable. One <table> and one <tbody> per group.
+Context: group, with_disputes, and for My Shift: area, window.
+{% endcomment %}{% with gid=group.station.pk|dash:group.part.pk cols=group|group_cols:with_disputes c=group.cell %}
+{% if c.show_operator_rows and not group.rows %}
+<p class="group-empty" id="group-{{ gid }}">No jobs at {{ group.station.name }} · part {{ group.part.hub_part_code }} in this window.</p>
+{% elif c.show_operator_rows %}
+<table class="data operators" id="group-{{ gid }}">
+  <caption>{{ group.station.name }} · part {{ group.part.hub_part_code }} {% trust_badge c.badge %}{% if group.median_rate_per_hour %}<span class="group-meta"> · median {{ group.median_rate_per_hour|floatformat:0 }} u/hr</span>{% endif %}{% if group.takt_rate_per_hour and c.show_rates %}<span class="group-meta"> · takt rate {{ group.takt_rate_per_hour|floatformat:0 }} u/hr</span>{% endif %}</caption>
+  <thead>
+    <tr>
+      <th scope="col">Operator</th><th scope="col" class="num">Jobs</th><th scope="col" class="num">Quantity</th>
+      {% if c.show_rates or c.rate_text %}<th scope="col">Rate vs median</th>{% endif %}
+      {% if c.show_transaction_gap %}<th scope="col">Time with no transaction</th>{% endif %}
+      {% if c.show_upstream_gap %}<th scope="col">Upstream output gap</th>{% endif %}
+      {% if c.show_tenure %}<th scope="col">Tenure</th>{% endif %}
+      {% if with_disputes and c.show_dispute %}<th scope="col" class="col-dispute"><span class="visually-hidden">Dispute</span></th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+  {% operators_sorted group.rows "alias" as rows %}{% for r in rows %}{% with rid=gid|dash:r.alias.pk %}
+    <tr class="operator-row">
+      <th scope="row" data-label="Operator">{% operator r.alias %}</th>
+      <td class="num" data-label="Jobs">{{ r.jobs }}{% if r.excluded_jobs %}{% if with_disputes %} <button type="button" class="button-link drill-toggle excluded-link" hx-get="{% url 'my_shift_jobs' area.pk r.alias.pk %}?{{ window.query }}" hx-target="#jobs-{{ rid }}" aria-expanded="false" aria-controls="jobs-{{ rid }}" data-load-error="Couldn't load jobs." data-takt-loaded="Jobs loaded">{{ r.excluded_jobs }} job{{ r.excluded_jobs|pluralize }} excluded</button>{% else %} <span class="subtle">({{ r.excluded_jobs }} excluded)</span>{% endif %}{% endif %}</td>
+      <td class="num" data-label="Quantity">{{ r.quantity }}</td>
+      {% if c.show_rates %}<td data-label="Rate vs median">{{ r.rate_vs_median_display|default:"—" }}</td>{% elif c.rate_text %}<td data-label="Rate vs median">{{ c.rate_text }}</td>{% endif %}
+      {% if c.show_transaction_gap %}<td data-label="Time with no transaction">{% if r.transaction_gap_minutes is not None %}{{ r.transaction_gap_minutes|duration }}{% else %}—{% endif %}</td>{% endif %}
+      {% if c.show_upstream_gap %}<td data-label="Upstream output gap">{% if r.upstream_gap_minutes is not None %}{{ r.upstream_gap_minutes|duration }}{% else %}—{% endif %}</td>{% endif %}
+      {% if c.show_tenure %}<td data-label="Tenure">{% if r.tenure_under_90 %}tenure &lt; 90 days{% endif %}</td>{% endif %}
+      {% if with_disputes and c.show_dispute %}<td class="col-dispute">{% if r.can_dispute %}<button type="button" class="button-link drill-toggle dispute-toggle" hx-get="{% url 'my_shift_jobs' area.pk r.alias.pk %}?{{ window.query }}" hx-target="#jobs-{{ rid }}" aria-expanded="false" aria-controls="jobs-{{ rid }}" data-load-error="Couldn't load jobs." data-takt-loaded="Jobs loaded">This looks wrong<span class="visually-hidden">: jobs for {% operator r.alias %}</span></button>{% endif %}</td>{% endif %}
+    </tr>
+    {% if with_disputes %}<tr class="job-list-row"><td colspan="{{ cols }}"><div class="drill" id="jobs-{{ rid }}"></div></td></tr>{% endif %}
+  {% endwith %}{% endfor %}
+  </tbody>
+  {% if group.jobs is not None %}<tfoot><tr><th scope="row">Part total</th><td class="num">{{ group.jobs }}</td><td class="num">{{ group.quantity }}</td>{% if cols > 3 %}<td colspan="{{ cols|add:-3 }}"></td>{% endif %}</tr></tfoot>{% endif %}
+</table>
+{% else %}
+<div class="group-unverified" id="group-{{ gid }}">
+  <p class="group-title"><strong>{{ group.station.name }} · part {{ group.part.hub_part_code }}</strong> {% trust_badge c.badge %}</p>
+  <p class="message">{{ group.message }}</p>
+</div>
+{% endif %}
+{% endwith %}

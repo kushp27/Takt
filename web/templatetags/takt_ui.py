@@ -34,6 +34,20 @@ def trust_badge(badge, long=False):
 
 
 @register.filter
+def dash(a, b):
+    """'12-7': a string id key from two values ({% with key=station.pk|dash:part.pk %})."""
+    return f"{a}-{b}"
+
+
+@register.filter
+def group_cols(group, with_disputes=False):
+    """Column count of an operator group's table, from its matrix cell (for colspans)."""
+    from web.screens.common import group_columns
+
+    return group_columns(group, bool(with_disputes))
+
+
+@register.filter
 def status_class(status_key):
     return STATUS_CLASSES.get(status_key or "", "status-neutral")
 

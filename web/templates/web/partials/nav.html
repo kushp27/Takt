@@ -1,0 +1,1 @@
+{% for item in takt_nav %}<li><a href="{{ item.url }}"{% if item.key == nav_active %} aria-current="page"{% endif %}>{{ item.label }}{% if item.count is not None %}<span class="nav-count" id="nav-dispute-count">{{ item.count }}<span class="visually-hidden"> open</span></span>{% endif %}</a></li>{% endfor %}

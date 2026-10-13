@@ -1,0 +1,7 @@
+{% load operator %}{% comment %}
+Operator drill-down: operators at one station and part only (design premise 4, D6), from the Line Health or
+Area page. Identity only through {% operator %}; letters come from the page's token.
+{% endcomment %}<h4 class="panel-heading" tabindex="-1">Operators at {{ station.name }}{% if part %}, part {{ part.hub_part_code }}{% endif %} · {{ window.label }}</h4>
+{% if lead_view %}<p class="subtle">Your shift only.</p>{% endif %}
+{% gate1_notice %}
+{% for group in groups %}{% include "web/partials/operator_group.html" with with_disputes=False %}{% empty %}<p>No jobs at {{ station.name }} in this window.</p>{% endfor %}

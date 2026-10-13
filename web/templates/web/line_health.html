@@ -1,0 +1,20 @@
+{% extends "web/base.html" %}{% load operator %}
+{% comment %}Line Health (design Component 6, D3, D4, D22): the ops manager's home. A plain table, no bordered
+boxes; each line leads with its status word and sentence, evidence below. Opens on the last completed
+production day (D21).{% endcomment %}
+{% block title %}Line Health{% endblock %}
+{% block content %}
+<div class="screen" {% page_hx_vals %}>
+  <div class="page-head">
+    <h1>Line Health</h1>
+    <p class="window-label">{{ window.label }}</p>
+  </div>
+  {% include "web/partials/window_picker.html" %}
+  <p class="phone-note">Open on a desktop to dispute or drill down.</p>
+  {% if rows %}
+    {% include "web/partials/line_rows.html" with caption_prefix="Lines" %}
+  {% else %}
+    <p>No lines in your assignment yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

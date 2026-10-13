@@ -90,3 +90,4 @@ p.htmx-request.htmx-indicator, .htmx-request p.htmx-indicator { display: block; 
 .print-actions { margin: 0 0 var(--s4); }
 .print-foot { margin-top: var(--s5); color: var(--text-2); font-size: var(--size-table); }
 .correction { min-width: 8rem; }
+

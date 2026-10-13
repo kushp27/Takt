@@ -54,11 +54,16 @@ SWEEP_CASES = [
         query=lambda w: {"date": w.today.isoformat()},
         shift="shift_1st",
     ),
-    # --- Lane D: register real screens below, e.g.
-    # SweepCase("web:my_shift", kwargs=lambda w: {"area_id": w.area_in.pk, "shift_id": w.shift_1st.pk},
-    #           shift="shift_1st"),
-    # SweepCase("web:operator_jobs", kwargs=lambda w: {"alias_id": w.ops["zeb"].alias.pk},
-    #           expected=lambda w: {"zeb"}, partial=True, parent="web:my_shift", shift="shift_1st"),
+    # --- Lane D: the real screens. Line Health (/line/) and its station drill-down render no operator
+    # identity and are not marked: discovery probes them as unmarked URLs.
+    # Operator drill-down at one station (from Line Health). A lead sees only their shift.
+    SweepCase(
+        "station_operators",
+        kwargs=lambda w: {"station_id": w.st_a1.pk},
+        query=lambda w: {"date": w.today.isoformat()},
+        expected=lambda w: w.in_scope(station="st_a1"),
+        partial=True,
+    ),
 ]
 
 # URL names (or namespaces) that discovery never probes. Keep this short and justified.
