@@ -114,6 +114,7 @@ def test_print_css_letter_black_and_white_hides_nav():
     assert re.search(r"\.site-header, \.stale-banner, nav,", css) and "display: none !important" in css
     assert "* { color: #000 !important; background: transparent !important;" in css
     assert ".print-station { break-inside: avoid;" in css  # page breaks only between stations
+    assert ".print-foot { display: none !important; }" in css  # one footer mechanism: no duplicate on the last page
     base = (Path(settings.BASE_DIR) / "web/templates/web/base.html").read_text()
     assert "<link rel=\"stylesheet\" href=\"{% static 'css/print.css' %}\" media=\"print\">" in base
 

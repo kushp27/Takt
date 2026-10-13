@@ -32,6 +32,7 @@
 .line-health caption, .data caption { text-align: left; font-weight: 600; padding: 0 0 var(--s2); }
 .line-health thead th { font-size: var(--size-table); }
 .line-health tbody.line-row th[scope="rowgroup"] { width: 14rem; font-weight: 600; color: var(--ink); }
+.line-health td.status-lead { width: 9rem; white-space: nowrap; }
 .line-health tr.status-row td { border-bottom: 0; padding-bottom: var(--s1); }
 .line-health tr.evidence-row td { font-size: var(--size-table); color: var(--ink); }
 .line-health .evidence-label { display: none; }

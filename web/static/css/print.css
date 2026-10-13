@@ -42,6 +42,7 @@ tfoot th, tfoot td { border-top: 1.5pt solid #000 !important; font-weight: 600; 
 .print-group { break-inside: avoid; page-break-inside: avoid; }
 .correction { width: 30%; border-left: 0.75pt solid #000 !important; }
 .print-total { margin: 2pt 0 0; }
-/* The footer repeats on every page via @page margin boxes (with page X of Y); this in-flow copy ends the
-   sheet so the words still print where a browser has no margin-box support. */
-.print-foot { margin-top: 10pt; font-size: 9pt; }
+/* The footer: one mechanism, @page margin boxes ("For lead use. Not for posting." and page X of Y on every
+   page, Chrome / Edge). Browsers without margin boxes (Firefox) print no footer; the on-screen copy below
+   the sheet is hidden in print so the last page never shows it twice. */
+.print-foot { display: none !important; }

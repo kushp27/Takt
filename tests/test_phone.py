@@ -51,5 +51,5 @@ def test_phone_hides_sparkline_and_dispute_controls_and_shows_the_note(p, client
         assert '<p class="phone-note">Open on a desktop to dispute or drill down.</p>' in pages[name], name
     # Label: value pairs on Line Health rows (Pace, Yield, Bottleneck), the status and sentence first
     row = re.search(r'<tbody class="line-row[^"]*"[^>]*>(.*?)</tbody>', pages["line_health"], re.S).group(1)
-    assert row.index("status-cell") < row.index('<span class="evidence-label">Pace: </span>') \
+    assert row.index("status-lead") < row.index("status-cell") < row.index('<span class="evidence-label">Pace: </span>') \
         < row.index('<span class="evidence-label">Yield: </span>') < row.index('<span class="evidence-label">Bottleneck: </span>')

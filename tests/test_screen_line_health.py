@@ -52,10 +52,11 @@ def test_line_row_golden(p, client):
     html = resp.content.decode()
     row = _row(p)
     body = re.search(rf'<tbody class="line-row\s*" id="line-{p["line"].pk}">(.*?)</tbody>', html, re.S).group(1)
-    # status word first, then the sentence, in one 18px status cell
-    status = re.search(r'<td colspan="4" class="status-cell">(.*?)</td>', body, re.S).group(1)
-    assert status.index(row.status) < status.index(row.sentence[:20])
-    assert f'class="status-word {_status_class(row.status_key)}">{row.status}</span>' in status
+    # D3: the row leads with the status word, then the line, then the 18px sentence
+    lead = re.search(r'<td class="status-lead" rowspan="2">(.*?)</td>', body, re.S)
+    assert lead and f'class="status-word {_status_class(row.status_key)}">{row.status}</span>' in lead.group(1)
+    assert body.index("status-lead") < body.index('<th scope="rowgroup"') < body.index(row.sentence[:20])
+    assert f'<td colspan="4" class="status-cell"><span class="sentence">{row.sentence}</span></td>' in body
     # evidence: merged pace + units with the raw counts as tooltip, yield + top code, bottleneck + coverage
     assert f'<td title="{row.pace.tooltip}" data-label="Pace">' in body
     assert row.pace.throughput_display in body and re.search(r"\d+% · [+−]\d+ units", row.pace.throughput_display)
