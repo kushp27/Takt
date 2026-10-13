@@ -1,18 +1,9 @@
-{% load operator takt_ui %}{% comment %}
-One submission in the queue: a <tbody> of its per-job rows (eng re-review D4). Rows are in operator display
-order within the submission. Open rows expand inline to the MES values (Review); decided rows show the
-decision and the note the lead sees. Context: sub (disputes.service.QueueSubmission), area, decided_ids.
+{% load operator %}{% comment %}
+One submission in the queue: a <tbody> of its per-job rows (eng re-review D4), in operator display order.
+Open rows expand inline to the MES values (Review); decided rows show the decision and the note the lead sees.
+Context: sub (disputes.service.QueueSubmission), area.
 {% endcomment %}<tbody class="submission{% if sub.overdue %} is-overdue{% endif %}" id="submission-{{ sub.submission_id }}">
-{% operators_sorted sub.items "dispute.job.alias" as items %}{% for item in items %}{% with d=item.dispute job=item.dispute.job %}
-  <tr class="dispute-row{% if d.status == 'open' and item.overdue %} overdue-row{% endif %}" id="dispute-{{ d.pk }}">
-    <td data-label="Age">{% if d.status == "open" and item.overdue %}<span class="overdue-label">Overdue</span> · {% endif %}{{ item.age }} shift{{ item.age|pluralize }}</td>
-    <td data-label="Station and part">{{ job.station.name }} · part {{ job.part.hub_part_code }}</td>
-    <th scope="row" data-label="Job"{% if d.pk in decided_ids %} tabindex="-1" data-takt-focus-here{% endif %}><span class="mono">{{ job.mes_id }}</span> · {{ job.started_at|plant_time }}</th>
-    <td data-label="Operator">{% operator job.alias %}</td>
-    <td data-label="Raised by">{{ d.raised_by|user_short }}</td>
-    <td data-label="Reason">{{ d.get_reason_display }}{% if d.reason_text %}: {{ d.reason_text }}{% endif %}</td>
-    <td class="col-dispute">{% if d.status == "open" %}<button type="button" class="button-link drill-toggle" hx-get="{% url 'dispute_detail' area.pk d.pk %}" hx-target="#dispute-{{ d.pk }}-detail" aria-expanded="false" aria-controls="dispute-{{ d.pk }}-detail" data-load-error="Couldn't load the job." data-takt-loaded="Job loaded">Review<span class="visually-hidden"> job {{ job.mes_id }}</span></button>{% else %}<span class="status-{{ d.status }}">{{ d.get_status_display }}</span> by {{ d.decided_by|user_short }}: {{ d.note }}{% endif %}</td>
-  </tr>
-  <tr class="detail-row"><td colspan="7"><div class="drill" id="dispute-{{ d.pk }}-detail"></div></td></tr>
-{% endwith %}{% endfor %}
+{% operators_sorted sub.items "dispute.job.alias" as items %}{% for item in items %}
+  {% include "disputes/partials/dispute_row.html" with oob=False focus=False %}
+{% endfor %}
 </tbody>

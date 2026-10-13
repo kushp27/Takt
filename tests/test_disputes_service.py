@@ -81,6 +81,20 @@ def test_apply_to_all_decides_every_open_job_in_the_submission(plant):
     assert m.Job.objects.filter(excluded_from_counts=True).count() == 0
 
 
+def test_apply_to_all_stays_inside_the_area(plant):
+    other = small_plant(code="dies")
+    other_area = f.area("Elsewhere")
+    other["line"].area = other_area
+    other["line"].save()
+    far = g.job(other["s2"], other["part"], f.alias(None, other["hub"], "X-1"), _t(other["hub"], 9), qty=3)
+    rows = service.submit(plant["lead"], plant["jobs"][:1] + [far], Dispute.NOT_MINE)
+    decided = service.decide(rows[0], plant["sup"], service.REJECT, "No.", apply_to_all=True,
+                             area=plant["area"], now=_t(plant["hub"], 16))
+    assert [d.pk for d in decided] == [rows[0].pk]
+    rows[1].refresh_from_db()
+    assert rows[1].status == Dispute.OPEN
+
+
 @pytest.mark.parametrize("decision", [service.CONFIRM, service.REJECT])
 def test_confirm_and_reject_both_require_a_note(plant, decision):
     [row] = service.submit(plant["lead"], plant["jobs"][:1], Dispute.TIME_WRONG)

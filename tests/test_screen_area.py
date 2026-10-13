@@ -134,7 +134,8 @@ def test_inline_expand_shows_mes_values_and_both_buttons(p, client):
     assert f"<td>{job.quantity}</td>" in html and "Nerissa Quell" in html
     assert '<button type="submit" name="decision" value="confirm">Confirm</button>' in html
     assert '<button type="submit" name="decision" value="reject">Reject</button>' in html
-    assert re.search(r'<form class="dispute-form" data-takt-form', html)
+    assert re.search(r'<form class="dispute-form decide-form" data-takt-form data-dispute-form="\d+"', html)
+    assert "Don't name operators." in html
     assert "<textarea" in html and "required" in html
 
 
@@ -160,16 +161,68 @@ def test_decide_per_job_and_apply_to_all(p, client):
     resp = c.post(f"{url}{rows[0].pk}/decide/", {"decision": "reject", "note": "Matches the traveler.",
                                                   TOKEN_PARAM: token}, HTTP_HX_REQUEST="true")
     html = resp.content.decode()
-    assert html.lstrip().startswith(f'<tbody class="submission" id="submission-{rows[0].submission_id}">')
-    assert "Rejected</span> by J. Ortiz: Matches the traveler." in html
+    # only the decided row changes: its expand row (the target) and the row itself, out of band (R13/D5)
+    assert html.lstrip().startswith(f'<tr class="detail-row" id="dispute-{rows[0].pk}-detail-row">')
+    assert _ids(html) == {f"dispute-{rows[0].pk}-detail-row", f"dispute-{rows[0].pk}-detail", f"dispute-{rows[0].pk}"}
+    assert f'id="dispute-{rows[0].pk}" data-dispute-status="rejected" hx-swap-oob="outerHTML"' in html
+    assert "<tbody" not in html and "Rejected</span> by J. Ortiz: Matches the traveler." in html
     events = json.loads(resp["HX-Trigger-After-Settle"])
     assert events == {"takt:announce": "Dispute rejected", "takt:navcount": 3}
     resp = c.post(f"{url}{rows[2].pk}/decide/", {"decision": "confirm", "note": "Double scanned.",
                                                   "apply_to_all": "1", TOKEN_PARAM: token}, HTTP_HX_REQUEST="true")
     assert json.loads(resp["HX-Trigger-After-Settle"])["takt:announce"] == "2 disputes confirmed"
+    html = resp.content.decode()
+    decided = {rows[2].pk, rows[3].pk}
+    assert _ids(html) == ({f"dispute-{pk}" for pk in decided} | {f"dispute-{pk}-detail-row" for pk in decided}
+                          | {f"dispute-{pk}-detail" for pk in decided})
+    assert f"dispute-{rows[1].pk}" not in html  # the other submission's open row (and any open form) untouched
     statuses = {d.pk: d.status for d in Dispute.objects.all()}
     assert statuses == {rows[0].pk: "rejected", rows[1].pk: "open", rows[2].pk: "confirmed", rows[3].pk: "confirmed"}
     assert set(m.Job.objects.filter(excluded=True).values_list("pk", flat=True)) == {rows[2].job_id, rows[3].job_id}
+
+
+def _ids(html):
+    return set(re.findall(r'\bid="([^"]+)"', html))
+
+
+def test_deciding_one_job_leaves_another_open_form_alone(p, client):
+    rows = _dispute(p, keys=("new",), n=2)  # one submission, two jobs
+    c = _login(client, p["users"]["supervisor"])
+    token = _token(c, p)
+    resp = c.post(f"/area/{p['area'].pk}/disputes/{rows[0].pk}/decide/",
+                  {"decision": "confirm", "note": "Recount.", TOKEN_PARAM: token}, HTTP_HX_REQUEST="true")
+    html = resp.content.decode()
+    assert f"dispute-{rows[1].pk}" not in html and f"submission-{rows[0].submission_id}" not in html
+
+
+def test_expand_of_an_already_decided_dispute_shows_the_decision(p, client):
+    [d] = _dispute(p)
+    c = _login(client, p["users"]["supervisor"])
+    token = _token(c, p)
+    service.decide(d, p["users"]["ops_manager"], service.REJECT, "Fine as recorded.", now=p["now"])
+    html = c.get(f"/area/{p['area'].pk}/disputes/{d.pk}/", {TOKEN_PARAM: token}, HTTP_HX_REQUEST="true").content.decode()
+    assert "Already rejected" in html and "Fine as recorded." in html and "<form" not in html
+
+
+def test_a_supervisor_cannot_decide_a_dispute_they_raised(p, client):
+    sup = p["users"]["supervisor"]
+    [d] = service.submit(sup, p["jobs"]["new"][:1], Dispute.WRONG_QUANTITY)
+    c = _login(client, sup)
+    token = _token(c, p)
+    for resp in (c.get(f"/area/{p['area'].pk}/disputes/{d.pk}/", {TOKEN_PARAM: token}, HTTP_HX_REQUEST="true"),
+                 c.post(f"/area/{p['area'].pk}/disputes/{d.pk}/decide/",
+                        {"decision": "confirm", "note": "Mine.", TOKEN_PARAM: token}, HTTP_HX_REQUEST="true")):
+        assert resp.status_code == 403 and resp["X-Takt-Inline"] == "out-of-scope"
+        assert "You raised this dispute, so another supervisor decides it." in resp.content.decode()
+    d.refresh_from_db()
+    assert d.status == Dispute.OPEN
+    # the builder may decide their own
+    [b] = service.submit(p["users"]["builder"], p["jobs"]["mid"][:1], Dispute.NOT_MINE)
+    c = _login(client, p["users"]["builder"])
+    c.post(f"/area/{p['area'].pk}/disputes/{b.pk}/decide/",
+           {"decision": "reject", "note": "Checked.", TOKEN_PARAM: _token(c, p)}, HTTP_HX_REQUEST="true")
+    b.refresh_from_db()
+    assert b.status == Dispute.REJECTED
 
 
 def test_t7_dispute_badge_confirm_exclusion(p, client):

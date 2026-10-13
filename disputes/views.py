@@ -15,6 +15,7 @@ outcomes in "My disputes"; the queue refuses them (D13).
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
+from accounts import scope as role_scope
 from accounts.decorators import area_scope_required, operator_bearing, render_out_of_scope, role_required
 from accounts.models import Profile
 from accounts.policy import OperatorScope, page_context
@@ -66,7 +67,21 @@ def dispute_detail(request, area_id, dispute_id):
     ctx = page_context(request, _scope(area, [dispute], windows.now().date()), parents=(QUEUE_VIEW,))
     if not is_decider(request.user):
         return render_out_of_scope(request, reason="role")
+    if _own(request.user, dispute):
+        return _refuse_own(request)
     return _detail(request, ctx, area, dispute)
+
+
+def _own(user, dispute):
+    """Nobody but the builder decides a dispute they raised themselves."""
+    return dispute.raised_by_id == user.pk and not role_scope.is_builder(user)
+
+
+def _refuse_own(request):
+    """D13-style inline refusal (403 with the X-Takt-Inline marker, so base.html swaps it in)."""
+    response = render(request, "disputes/partials/own_dispute.html", status=403)
+    response["X-Takt-Inline"] = "out-of-scope"
+    return response
 
 
 def _detail(request, ctx, area, dispute, error="", note="", status=200):
@@ -93,12 +108,14 @@ def dispute_decide(request, area_id, dispute_id):
     ctx = page_context(request, _scope(area, [dispute], now.date()), parents=(QUEUE_VIEW,))
     if not is_decider(request.user):
         return render_out_of_scope(request, reason="role")
+    if _own(request.user, dispute):
+        return _refuse_own(request)
     decision = request.POST.get("decision", "")
     note = request.POST.get("note", "")
     try:
         decided = service.decide(dispute, request.user, decision, note,
                                  affects_counts=request.POST.get("affects_counts") == "1",
-                                 apply_to_all=request.POST.get("apply_to_all") == "1", now=now)
+                                 apply_to_all=request.POST.get("apply_to_all") == "1", now=now, area=area)
     except service.DisputeError as e:
         response = _detail(request, ctx, area, _dispute_in_area(area, dispute_id), error=str(e), note=note)
         response["HX-Retarget"] = f"#dispute-{dispute.pk}-detail"
@@ -106,11 +123,12 @@ def dispute_decide(request, area_id, dispute_id):
         return response
     rows = list(Dispute.objects.select_related("job__station__line__hub", "job__part", "job__alias__operator",
                                                "raised_by", "decided_by")
-                .filter(submission_id=dispute.submission_id, job__station__line__area=area))
-    [sub] = service.queue(rows, now)
+                .filter(pk__in=[d.pk for d in decided]))
+    items = {i.dispute.pk: i for s in service.queue(rows, now) for i in s.items}
     word = "confirmed" if decision == service.CONFIRM else "rejected"
     response = render(request, "disputes/partials/decided.html", {
-        "takt_page": ctx, "area": area, "sub": sub, "decided_ids": {d.pk for d in decided},
+        "takt_page": ctx, "area": area, "primary": items[dispute.pk],
+        "others": [items[d.pk] for d in decided if d.pk != dispute.pk],
     })
     n = len(decided)
     return announce(response, f"Dispute {word}" if n == 1 else f"{n} disputes {word}",

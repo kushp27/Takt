@@ -17,10 +17,15 @@ re-review D4). The form carries data-takt-form so the live Refresh never swaps o
     <tr><th scope="row">Lead's reason</th><td>{{ d.get_reason_display }}{% if d.reason_text %}: {{ d.reason_text }}{% endif %}</td></tr>
   </tbody>
 </table>
-<form class="dispute-form" data-takt-form method="post" hx-post="{% url 'dispute_decide' area.pk d.pk %}" hx-target="#submission-{{ d.submission_id }}" hx-swap="outerHTML">
+{% if d.status != "open" %}
+<p class="decided-state" data-dispute-status="{{ d.status }}"><span class="status-{{ d.status }}">Already {{ d.get_status_display|lower }}</span> by {{ d.decided_by|user_short }}{% if d.decided_at %}, {{ d.decided_at|plant_time }}{% endif %}: {{ d.note }}</p>
+{% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+{% else %}
+<form class="dispute-form decide-form" data-takt-form data-dispute-form="{{ d.pk }}" method="post" hx-post="{% url 'dispute_decide' area.pk d.pk %}" hx-target="#dispute-{{ d.pk }}-detail-row" hx-swap="outerHTML">
   {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
   <p><label for="note-{{ d.pk }}">Note to the lead (required for Confirm and Reject)</label><br>
-    <textarea id="note-{{ d.pk }}" name="note" required>{{ note }}</textarea></p>
+    <textarea id="note-{{ d.pk }}" name="note" required aria-describedby="note-hint-{{ d.pk }}">{{ note }}</textarea><br>
+    <span class="subtle" id="note-hint-{{ d.pk }}">Don't name operators.</span></p>
   <div class="choice"><input type="checkbox" id="affects-{{ d.pk }}" name="affects_counts" value="1"{% if affects_default %} checked{% endif %}><label for="affects-{{ d.pk }}">The count itself is wrong: also remove the job from counts</label></div>
   {% if others %}<div class="choice"><input type="checkbox" id="all-{{ d.pk }}" name="apply_to_all" value="1"><label for="all-{{ d.pk }}">Apply to all {{ open_total }} open jobs in this submission</label></div>{% endif %}
   <div class="actions">
@@ -29,3 +34,4 @@ re-review D4). The form carries data-takt-form so the live Refresh never swaps o
     <button type="button" class="button-link" data-takt-cancel>Cancel</button>
   </div>
 </form>
+{% endif %}

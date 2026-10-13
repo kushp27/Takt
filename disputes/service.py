@@ -88,11 +88,12 @@ def default_affects_counts(dispute):
 
 
 @transaction.atomic
-def decide(dispute, user, decision, note, *, affects_counts=None, apply_to_all=False, now=None):
+def decide(dispute, user, decision, note, *, affects_counts=None, apply_to_all=False, now=None, area=None):
     """Confirm or reject `dispute` (and, with apply_to_all, every other OPEN dispute in its submission).
 
     affects_counts: on confirm, the count itself is wrong, so the job also leaves counts
-    (default: the reason is "wrong quantity"). Returns the decided Dispute rows.
+    (default: the reason is "wrong quantity"). area: limit apply_to_all to this area's jobs (the queue's).
+    Returns the decided Dispute rows.
     """
     now = now or timezone.now()
     note = (note or "").strip()
@@ -105,9 +106,11 @@ def decide(dispute, user, decision, note, *, affects_counts=None, apply_to_all=F
         raise DisputeError("This dispute has already been decided.")
     targets = [dispute]
     if apply_to_all:
-        targets += list(Dispute.objects.select_for_update()
-                        .filter(submission_id=dispute.submission_id, status=Dispute.OPEN)
-                        .exclude(pk=dispute.pk).order_by("pk"))
+        others = (Dispute.objects.select_for_update()
+                  .filter(submission_id=dispute.submission_id, status=Dispute.OPEN).exclude(pk=dispute.pk))
+        if area is not None:
+            others = others.filter(job__station__line__area=area)
+        targets += list(others.order_by("pk"))
     stations = OrderedDict()
     for d in targets:
         d.status = Dispute.CONFIRMED if decision == CONFIRM else Dispute.REJECTED
