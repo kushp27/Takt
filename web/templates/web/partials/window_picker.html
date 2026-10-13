@@ -1,0 +1,9 @@
+{% comment %}The shift/date picker every screen shares (design review D21). Context `picker` from web.windows.picker().
+A plain GET form: it works without script and keeps keyboard order simple.{% endcomment %}<form class="window-picker no-print" method="get" action="{{ picker.action }}" aria-label="Choose the time window">
+  {% for name, value in picker.extra %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+  <label>Date<input type="date" name="date" value="{{ picker.date }}" required></label>
+  <label>Shift<select name="shift_id">{% if picker.allow_all_shifts %}<option value=""{% if not picker.shift_id %} selected{% endif %}>All shifts</option>{% endif %}{% for pk, name in picker.shift_choices %}<option value="{{ pk }}"{% if pk == picker.shift_id %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+  {% if picker.days %}<label>Days<select name="days"><option value="1"{% if picker.days == 1 %} selected{% endif %}>1 day</option><option value="7"{% if picker.days == 7 %} selected{% endif %}>7 days</option><option value="14"{% if picker.days == 14 %} selected{% endif %}>14 days</option></select></label>{% endif %}
+  <button type="submit">Show</button>
+  {% if picker.current_url %}<a href="{{ picker.current_url }}">Current shift</a>{% endif %}
+</form>
