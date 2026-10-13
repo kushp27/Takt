@@ -2,17 +2,24 @@
 
 Everything here returns plain dataclasses. Operator identity is NEVER returned as a name:
 rows carry OperatorAlias / Operator objects (alias.operator is select_related) and Lane B's
-`operator_display(user, operator, context)` decides named / letter / hidden. An unmapped alias
-has operator=None; show it as "Unmapped operator (<hub_operator_id>)" (Component 2).
+`operator_display(user, operator, context)` decides named / letter / hidden, including the
+"Unmapped operator" label for an alias with operator=None (Component 2). Templates must never
+render OperatorRow.hub_operator_id (filled only for unmapped aliases) or any name directly.
+
+Jobs are stamped by START time (user decision; ingest.service.stamp_instant): a job counts toward
+the shift it started in, a late close changes that shift's totals, and an open job stays on its
+start shift. A window's `as_of` also cuts counts: only jobs completed (and scrap found) by then.
 
 Definitions (design Component 3, premise 5):
 - takt time = planned available time / demand (seconds per unit), per part family per day at the
   line; planned time is net of breaks and planned maintenance (core.shifts.ShiftWindow.planned_seconds).
 - pace = good units / units required so far, where units required = demand x planned elapsed /
-  planned day. Line pace counts good units at the final station only; station pace uses only the
-  families routed through the station, times their visit count.
+  planned day. Line pace counts good units at the final station only, each family's divided by its
+  visit count there; station pace uses only the families routed through the station, times their
+  visit count (a station with no Routing has no pace: "no routing").
 - zero or missing demand adds 0 units required and is listed "no demand set"; when units required
-  is 0, pace is "—" with the reason, never 0% or ∞ (eng review D7).
+  is 0, pace is "—" with the reason, never 0% or ∞ (eng review D7). A missing row also raises the
+  red admin warning (TaktConfig list and admin index).
 - station yield = good / (good + scrap found there); line yield (RTY) = product over stations of
   each station's yield pooled over parts, Σgood / Σ(good + scrap). Per-part yield is in station rows.
 - bottleneck = the lowest station pace among count-trusted stations, with coverage.
@@ -20,7 +27,7 @@ Definitions (design Component 3, premise 5):
   shift rates on that station-part over the trailing 4 weeks.
 - transaction gap = shift time minus breaks minus time covered by the operator's jobs ("time with no
   transaction", never "idle"); upstream output gap = working-time windows of 15+ minutes in which the
-  upstream station completed nothing.
+  upstream station (the previous station on the part family's Routing) completed nothing.
 What a cell may show is decided by trust/matrix.py (Component 4a), never here.
 """
 
@@ -55,6 +62,7 @@ REASON_TEXT = {
     "no_demand": "no demand set",
     "no_shift": "no shift scheduled",
     "not_started": "shift not started",
+    "no_routing": "no routing",
     "counts_unverified": "Counts unverified",
     "final_station_unverified": "unavailable: final-station counts unverified",
 }
@@ -69,10 +77,11 @@ def _minus(n):
 
 @dataclass(frozen=True)
 class Pace:
-    good: int  # good units counted
+    good: float  # good units counted (line pace: final-station good / visit count, may be fractional)
     required: float  # units required so far
     value: float | None  # good / required, or None (see reason)
-    reason: str | None = None  # no_demand | no_shift | not_started | counts_unverified | final_station_unverified
+    # no_demand | no_shift | not_started | no_routing | counts_unverified | final_station_unverified
+    reason: str | None = None
 
     @property
     def reason_text(self):
@@ -180,7 +189,8 @@ class TrendPoint:
 class LineHealthRow:
     line: Line
     window: Window
-    status: str | None  # On pace | Behind | Yield problem | No demand set | Pace unavailable | None
+    # On pace | Behind | Yield problem | No demand set (total required 0) | Pace unavailable | None
+    status: str | None
     status_key: str | None  # on_pace | behind | yield_problem | no_demand | pace_unavailable | no_shift | not_started
     sentence: str
     pace: Pace
@@ -253,7 +263,7 @@ class OperatorRow:
     alias: OperatorAlias
     operator: object  # core.Operator or None (unmapped): render through operator_display()
     unmapped: bool
-    hub_operator_id: str  # for "Unmapped operator (hub ID)"
+    hub_operator_id: str | None  # unmapped aliases only; for operator_display, NEVER rendered by templates
     jobs: int
     quantity: int
     excluded_jobs: int  # design review D23: "N jobs excluded" link
@@ -365,18 +375,21 @@ class Scope:
 
 
 class _LineData:
-    """One line's counts, scrap, demand and routing for a date range, aggregated in Python per window."""
+    """One line's counts, scrap, demand and routing for a date range, aggregated in Python per window.
 
-    def __init__(self, line, date_from, date_to, plan=None):
+    cutoff: a past as_of; only jobs completed and scrap found by then are counted."""
+
+    def __init__(self, line, date_from, date_to, plan=None, cutoff=None):
         self.line = line
         self.plan = plan or HubPlan(line.hub)
         self.stations = list(line.stations.order_by("sequence"))
         self.final = self.stations[-1] if self.stations else None
         self.sp = defaultdict(list)
-        for sid, pid, fid, d, shid, jobs, qty, scrap, good in queries.station_part_shift([line.pk], date_from, date_to):
+        for sid, pid, fid, d, shid, jobs, qty, scrap, good in queries.station_part_shift(
+                [line.pk], date_from, date_to, cutoff):
             self.sp[d].append((sid, pid, fid, shid, jobs, qty, scrap, good))
         self.scrap = defaultdict(list)
-        for sid, cid, pid, d, shid, qty in queries.scrap_codes([line.pk], date_from, date_to):
+        for sid, cid, pid, d, shid, qty in queries.scrap_codes([line.pk], date_from, date_to, cutoff):
             self.scrap[d].append((sid, cid, shid, qty))
         self.demand = defaultdict(dict)
         for fid, d, units in TaktConfig.objects.filter(line=line, production_date__range=(date_from, date_to)) \
@@ -430,18 +443,29 @@ class _LineData:
                 total += frac * sum(units * visits[fid] for fid, units in day.items() if fid in visits)
         return total
 
-    def _reason(self, window, required):
+    def _reason(self, window, required, station=None):
         if not self.plan.scheduled(window):
             return "no_shift"
         if not self.plan.started(window):
             return "not_started"
+        if station is not None and not self.routing.get(station.pk):
+            return "no_routing"
         if required <= 0:
             return "no_demand"
         return None
 
+    def final_good(self, window):
+        """Good units at the final station, each family's divided by its visit count there: a family
+        that visits the final station twice completes one unit per two transactions."""
+        if self.final is None:
+            return 0
+        visits = self.routing.get(self.final.pk, {})
+        by_family = self.agg(window, lambda sid, pid, fid: (sid, fid))
+        return sum(a[3] / visits.get(fid, 1) for (sid, fid), a in by_family.items() if sid == self.final.pk)
+
     def line_pace(self, window, totals=None):
-        totals = totals if totals is not None else self.by_station(window)
-        good = totals.get(self.final.pk, [0, 0, 0, 0])[3] if self.final else 0
+        good = self.final_good(window)
+        good = int(good) if float(good).is_integer() else good
         required = self.required(window)
         reason = self._reason(window, required)
         if reason is None and (self.final is None or not self.final.count_trusted):
@@ -452,7 +476,7 @@ class _LineData:
         totals = totals if totals is not None else self.by_station(window)
         good = totals.get(station.pk, [0, 0, 0, 0])[3]
         required = self.required(window, station)
-        reason = self._reason(window, required)
+        reason = self._reason(window, required, station)
         if reason is None and not station.count_trusted:
             reason = "counts_unverified"
         return Pace(good, required, None if reason else good / required, reason)
@@ -533,7 +557,9 @@ def _trend_text(trend):
             f"yield {span([t.yield_ for t in trend])}")
 
 
-def _line_row(data, window):
+def _line_row(data, window, settings=None):
+    s = settings or SiteSettings.load()
+    pace_floor, yield_floor = s.pace_sd_floor_pts / 100, s.yield_sd_floor_pts / 100
     totals = data.by_station(window)
     pace = data.line_pace(window, totals)
     ly = data.line_yield(window, totals)
@@ -544,9 +570,9 @@ def _line_row(data, window):
     base_dates = list(_dates(window.date_from - timedelta(days=BASELINE_DAYS), window.date_from - timedelta(days=1)))
     pace_hist = [series[d][0] for d in base_dates]
     yield_hist = [series[d][1] for d in base_dates]
-    pace_class = S.classify(pace.value, pace_hist)
-    yield_class = S.classify(ly.value, yield_hist)
-    pace_base, yield_base = S.baseline(pace_hist), S.baseline(yield_hist)
+    pace_class = S.classify(pace.value, pace_hist, pace_floor)
+    yield_class = S.classify(ly.value, yield_hist, yield_floor)
+    pace_base, yield_base = S.baseline(pace_hist, pace_floor), S.baseline(yield_hist, yield_floor)
     pace_delta = pace.value - pace_base["mean"] if pace.value is not None and pace_base else 0
     yield_delta = ly.value - yield_base["mean"] if ly.value is not None and yield_base else 0
 
@@ -559,10 +585,10 @@ def _line_row(data, window):
         word, key = None, pace.reason
         sentence = "No shift scheduled." if pace.reason == "no_shift" else "Shift not started."
     else:
-        # Judgment call: a MISSING demand row anywhere in the window (an admin error) also sets
-        # "No demand set", even when other families give pace a number; demand 0 alone does not.
-        no_demand = pace.reason == "no_demand" or any(g.reason == "missing" for g in gaps)
-        word = S.status(no_demand=no_demand, pace_value=pace.value,
+        # Eng review D7: a missing demand row is treated like demand 0. "No demand set" is the
+        # status only when the line's total units required is 0; otherwise pace and yield decide,
+        # and the families without demand are named at the start of the sentence.
+        word = S.status(no_demand=pace.reason == "no_demand", pace_value=pace.value,
                         pace_suppressed=pace.reason == "final_station_unverified", yield_class=yield_class)
         key = S.STATUS_KEYS[word]
         note = None
@@ -575,7 +601,7 @@ def _line_row(data, window):
             yield_delta=yield_delta, top_code=top.label if top else None,
             cause_station=top.cause_station.name if top and top.cause_station else None,
             no_demand_families=gap_families, pace_note=note,
-            bottleneck=bottleneck.sentence if bottleneck else None,
+            bottleneck=bottleneck.sentence if bottleneck else None, pace_value=pace.value,
         )
     trend = [TrendPoint(d, *series[d]) for d in _dates(window.date_to - timedelta(days=TREND_DAYS - 1), window.date_to)]
     return LineHealthRow(
@@ -602,13 +628,13 @@ def line_health(lines, date_from, date_to=None, *, shift=None, as_of=None):
     window = Window(date_from, date_to or date_from,
                     None if shift is None else (shift if isinstance(shift, str) else shift.name), as_of)
     start = min(window.date_from - timedelta(days=BASELINE_DAYS), window.date_to - timedelta(days=TREND_DAYS - 1))
-    return [_line_row(_LineData(line, start, window.date_to), window)
+    return [_line_row(_LineData(line, start, window.date_to, cutoff=window.as_of), window)
             for line in Line.objects.filter(pk__in=[ln.pk for ln in lines]).select_related("hub")]
 
 
 def station_rows(line, window):
     """The station drill-down for a line: one StationRow per station in sequence, with per-part rows."""
-    data = _LineData(line, window.date_from, window.date_to)
+    data = _LineData(line, window.date_from, window.date_to, cutoff=window.as_of)
     totals = data.by_station(window)
     per_part = data.agg(window, lambda sid, pid, fid: (sid, pid))
     grades = {(g.station_id, g.part_id): g for g in StationPartGrade.objects.filter(station__line=line)}
@@ -650,6 +676,8 @@ def station_rows(line, window):
 def _batch_stats(station, window, data):
     qs = Job.objects.filter(station=station, completed_at__isnull=False, excluded_from_counts=False,
                             production_date__range=(window.date_from, window.date_to))
+    if window.as_of is not None:
+        qs = qs.filter(completed_at__lte=window.as_of)
     ids = data.shift_ids(window)
     if ids is not None:
         qs = qs.filter(shift_id__in=ids)
@@ -696,6 +724,12 @@ def _upstream_gap_seconds(segs, completions, threshold_s):
     return sum(g for g in (b - a for a, b in zip(pts, pts[1:])) if g >= threshold_s)
 
 
+def _upstream_station(station, family_id):
+    """The previous station on the part family's Routing (highest sequence below this one), or None."""
+    return (Station.objects.filter(line=station.line, sequence__lt=station.sequence, routings__family_id=family_id)
+            .order_by("-sequence").first())
+
+
 def operator_groups(station, part=None, window=None):
     """My Shift / operator drill-down for one station: one OperatorGroup per part that ran in the
     window (or only `part`). Gated by the display matrix: a station that is not count-trusted
@@ -712,7 +746,7 @@ def operator_groups(station, part=None, window=None):
     acc = defaultdict(lambda: defaultdict(lambda: {"jobs": 0, "qty": 0, "excl": 0, "rq": 0, "rs": 0.0,
                                                    "windows": set()}))
     for pid, aid, oid, d, shid, jobs, qty, excl, rq, rs in queries.operator_shift(
-            station.pk, window.date_from, window.date_to, part.pk if part else None):
+            station.pk, window.date_from, window.date_to, part.pk if part else None, window.as_of):
         if ids is not None and shid not in ids:
             continue
         a = acc[pid][aid]
@@ -728,24 +762,25 @@ def operator_groups(station, part=None, window=None):
     grades = {g.part_id: g for g in StationPartGrade.objects.filter(station=station, part_id__in=part_ids)}
     aliases = OperatorAlias.objects.select_related("operator").in_bulk(
         {aid for p in acc.values() for aid in p})
-    upstream = (Station.objects.filter(line=station.line, sequence__lt=station.sequence)
-                .order_by("-sequence").first())
     demand = dict(TaktConfig.objects.filter(line=station.line, production_date=window.date_to)
                   .values_list("family_id", "demand_units"))
     upstream_cache = {}
 
-    def upstream_gap(key):
-        if key not in upstream_cache:
+    def upstream_gap(upstream, key):
+        """Upstream output gap in one shift window: from the upstream station's own completions
+        (counted ones: excluded_from_counts jobs dropped), by completion time, not stamped shift."""
+        if (upstream.pk, key) not in upstream_cache:
             w = plan.stamper.window(*key)
             if w is None:
-                upstream_cache[key] = 0.0
+                upstream_cache[(upstream.pk, key)] = 0.0
             else:
                 segs = _segments(w, now)
-                done = list(Job.objects.filter(station=upstream, completed_at__gte=w.start,
-                                               completed_at__lt=min(w.end, now))
+                done = list(Job.objects.filter(station=upstream, excluded_from_counts=False,
+                                               completed_at__gte=w.start, completed_at__lt=min(w.end, now))
                             .values_list("completed_at", flat=True))
-                upstream_cache[key] = _upstream_gap_seconds(segs, done, settings.upstream_gap_minutes * 60)
-        return upstream_cache[key]
+                upstream_cache[(upstream.pk, key)] = _upstream_gap_seconds(
+                    segs, done, settings.upstream_gap_minutes * 60)
+        return upstream_cache[(upstream.pk, key)]
 
     groups = []
     for pid in sorted(part_ids, key=lambda p: parts[p].hub_part_code):
@@ -764,9 +799,10 @@ def operator_groups(station, part=None, window=None):
             continue
         if c.show_rates:
             group.median_rate_per_hour = queries.median_operator_rate(
-                station.pk, pid, window.date_to - timedelta(days=RATE_MEDIAN_DAYS - 1), window.date_to)
+                station.pk, pid, window.date_to - timedelta(days=RATE_MEDIAN_DAYS - 1), window.date_to, window.as_of)
         group.jobs = sum(a["jobs"] for a in acc[pid].values())
         group.quantity = sum(a["qty"] for a in acc[pid].values())
+        upstream = _upstream_station(station, p.family_id) if c.show_upstream_gap else None
         for aid, a in sorted(acc[pid].items()):
             alias = aliases[aid]
             op = alias.operator
@@ -780,14 +816,15 @@ def operator_groups(station, part=None, window=None):
             if c.show_transaction_gap and a["windows"]:
                 gap = _transaction_gap_seconds(alias, a["windows"], plan, now) / 60
             ugap = None
-            if c.show_upstream_gap and upstream is not None and a["windows"]:
-                ugap = sum(upstream_gap(k) for k in a["windows"]) / 60
+            if upstream is not None and a["windows"]:
+                ugap = sum(upstream_gap(upstream, k) for k in a["windows"]) / 60
             tenure = under = None
             if c.show_tenure and op is not None and op.hire_date:
                 tenure = (window.date_to - op.hire_date).days
                 under = tenure < settings.tenure_flag_days
             group.rows.append(OperatorRow(
-                alias=alias, operator=op, unmapped=unmapped, hub_operator_id=alias.hub_operator_id,
+                alias=alias, operator=op, unmapped=unmapped,
+                hub_operator_id=alias.hub_operator_id if unmapped else None,
                 jobs=a["jobs"], quantity=a["qty"], excluded_jobs=a["excl"], rate_per_hour=rate,
                 rate_vs_median=rate_vs, rate_text=c.rate_text, transaction_gap_minutes=gap,
                 upstream_gap_minutes=ugap, tenure_days=tenure, tenure_under_90=under, can_dispute=c.show_dispute,
@@ -796,18 +833,24 @@ def operator_groups(station, part=None, window=None):
 
 
 def _transaction_gap_seconds(alias, windows, plan, now):
-    """Shift time minus breaks minus time covered by the person's jobs (any station). Open jobs
-    cover time up to `now`."""
+    """Shift time minus breaks minus time covered by the person's jobs at any station, per shift
+    window the person worked. Job intervals are intersected with each window's working segments
+    (selected by time, not by stamped shift). A job still open at `now` covers time up to `now`,
+    capped at the window end; an open job started before the window began is ignored (a forgotten
+    job must not hide a whole shift)."""
     spans = [w for w in (plan.stamper.window(shid, d) for shid, d in windows) if w is not None]
     if not spans:
         return 0.0
     lo, hi = min(w.start for w in spans), max(w.end for w in spans)
     jobs = Job.objects.filter(started_at__lt=hi).exclude(completed_at__lte=lo)
     jobs = jobs.filter(alias__operator=alias.operator) if alias.operator_id else jobs.filter(alias=alias)
-    intervals = [(s, e or now) for s, e in jobs.values_list("started_at", "completed_at") if (e or now) > s]
+    rows = [(s, e if e is not None and e <= now else None) for s, e in jobs.values_list("started_at", "completed_at")
+            if s < now]
     total = 0.0
     for w in spans:
         segs = _segments(w, now)
+        intervals = [(s, e) for s, e in rows if e is not None and e > s]
+        intervals += [(s, min(now, w.end)) for s, e in rows if e is None and s >= w.start and min(now, w.end) > s]
         total += sum((b - a).total_seconds() for a, b in segs) - _covered_seconds(segs, intervals)
     return total
 
@@ -875,10 +918,12 @@ def job_list(scope, window):
 
 def shift_comparison(lines, production_date, *, as_of=None):
     """Area's 3-shift table (design review D7): line pace and yield for each scheduled shift that
-    starts on `production_date`. Returns [ShiftComparisonRow]."""
+    starts on `production_date`. The doc does not say which shifts to compare; this keeps the
+    shifts of one production date (yesterday's are one call with the previous date).
+    Returns [ShiftComparisonRow]."""
     out = []
     for line in Line.objects.filter(pk__in=[ln.pk for ln in lines]).select_related("hub"):
-        data = _LineData(line, production_date, production_date)
+        data = _LineData(line, production_date, production_date, cutoff=as_of)
         cells = []
         for w in data.plan.windows_on(production_date):
             win = Window.for_shift(w.shift, production_date, as_of)

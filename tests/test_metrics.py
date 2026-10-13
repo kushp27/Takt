@@ -1,7 +1,7 @@
 """Golden numbers for the metric layer: pace, takt, yield, RTY, status and sentence, zero/missing
 demand, kiln batches, operator rows, "worth a conversation", job list and the shift table.
 
-small_plant(): Cores Line 1 with Injection 3 (seq 1) -> Sort (seq 2), part C-4471 (Core-S), and
+small_plant(): Cores Line 1 with Injection 3 (seq 1) -> Sort (seq 2), part C-4471 (Cores-S), and
 shifts every day: 1st 07-15 (break 11:30-12:00), 2nd 15-23 (break 19:30-20:00), 3rd 23-07
 (break 03:30-04:00). Each shift plans 7.5 h = 27,000 s; a normal day plans 81,000 s.
 """
@@ -9,6 +9,8 @@ shifts every day: 1st 07-15 (break 11:30-12:00), 2nd 15-23 (break 19:30-20:00), 
 from datetime import date, timedelta
 
 import pytest
+from django.contrib import messages as dj_messages
+from django.utils import timezone as djtz
 
 from core import models as m
 from core.shifts import ShiftStamper
@@ -46,7 +48,7 @@ def plant():
 
 def _first_shift_day(p, d=D):
     """1st shift on d: Injection 3 makes 300 good (scrap 20 short shots); Sort makes 270 good:
-    part A 170 (scrap 10 voids), part B 100 (scrap 15 voids + 5 chips). Demand Core-S 900/day."""
+    part A 170 (scrap 10 voids), part B 100 (scrap 15 voids + 5 chips). Demand Cores-S 900/day."""
     hub, s1, s2, a, b, op = p["hub"], p["s1"], p["s2"], p["part"], p["part_b"], p["op"]
     g.demand(p["line"], p["family"], d, 900)
     for hh in (8, 9, 10):
@@ -102,16 +104,17 @@ def test_line_and_station_pace_golden(plant):
     assert (row.status, row.status_key) == ("Behind", "behind")
     assert row.bottleneck.station == plant["s2"]
     assert row.bottleneck_coverage_text == "bottleneck chosen from 2 of 2 stations"
-    assert row.sentence == ("Pace and yield in their usual range. "
+    assert row.sentence == ("Pace normal, yield in its usual range. "
                             "Bottleneck: Sort at 90% (chosen from 2 of 2 stations).")
 
     # the whole day: 900 required, 270 good
     [day] = api.line_health([plant["line"]], D, as_of=_end_of(hub, D))
     assert (day.pace.required, day.pace.display, day.pace.throughput_display) == (900, "30%", "30% · −630 units")
 
-    # live, mid-shift at 12:30: 5 h of 22.5 planned have elapsed -> 200 required
+    # live, mid-shift at 12:30: 5 h of 22.5 planned have elapsed -> 200 required, and only jobs
+    # completed by 12:30 count: Sort's 170 (part B's job completes at 13:10) -> 170 / 200 = 85%
     [live] = api.line_health([plant["line"]], D, shift="1st", as_of=_t(hub, D, 12, 30))
-    assert (live.pace.required, live.pace.display, live.status) == (200, "135%", "On pace")
+    assert (live.pace.good, live.pace.required, live.pace.display, live.status) == (170, 200, "85%", "Behind")
 
 
 def test_station_rows_golden(plant):
@@ -174,17 +177,15 @@ def test_zero_demand_pace_is_a_dash_never_zero_or_infinity(plant):
         None, "—", "no_demand", "— · no demand set")
     assert (row.status, row.status_key) == ("No demand set", "no_demand")
     assert [(gap.family.name, gap.production_date, gap.reason, gap.text) for gap in row.no_demand] == [
-        ("Core-S", D, "zero", "no demand set")]
-    assert row.sentence == "No demand set for Core-S. Yield in its usual range."
+        ("Cores-S", D, "zero", "no demand set")]
+    assert row.sentence == "No demand set for Cores-S. Yield in its usual range."
     rows = api.station_rows(plant["line"], Window.for_shift("1st", D, as_of=_end_of(plant["hub"], D)))
     assert [(r.pace.display, r.pace.reason_text) for r in rows] == [("—", "no demand set")] * 2
     # zero demand is legitimate: not in the admin's missing-row warning
     assert api.missing_demand([plant["line"]], D, D, include_zero=False) == []
 
 
-def test_missing_demand_row_dash_and_admin_warning(plant, client, settings):
-    settings.STORAGES = {**settings.STORAGES,
-                         "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}
+def test_missing_demand_row_dash(plant):
     _first_shift_day(plant)
     m.TaktConfig.objects.all().delete()
     [row] = api.line_health([plant["line"]], D, shift="1st", as_of=_end_of(plant["hub"], D))
@@ -192,23 +193,71 @@ def test_missing_demand_row_dash_and_admin_warning(plant, client, settings):
     gaps = api.missing_demand([plant["line"]], D, D + timedelta(days=1))
     assert [(gp.production_date, gp.reason) for gp in gaps] == [(D, "missing"), (D + timedelta(days=1), "missing")]
 
-    admin = f.user("boss", None, superuser=True)
-    client.force_login(admin)
-    resp = client.get("/admin/core/taktconfig/", follow=True)
-    text = resp.content.decode()
-    assert "No demand set" in text and "Cores Line 1" in text and "Core-S" in text
+
+@pytest.mark.parametrize("url", ["/admin/core/taktconfig/", "/admin/"])
+def test_missing_demand_red_admin_warning(plant, client, settings, url):
+    settings.STORAGES = {**settings.STORAGES,
+                         "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}
+    client.force_login(f.user("boss", None, superuser=True))
+    today = djtz.localtime(djtz.now()).date()
+    resp = client.get(url)
+    msgs = [mm for mm in resp.context["messages"] if mm.message.startswith("No demand set")]
+    assert len(msgs) == 1 and msgs[0].level == dj_messages.ERROR
+    assert "Cores Line 1 · Cores-S" in msgs[0].message
+    # with demand entered for the whole range, the warning clears
+    for i in range(-7, 8):
+        g.demand(plant["line"], plant["family"], today + timedelta(days=i), 900)
+    resp = client.get(url)
+    assert not [mm for mm in resp.context["messages"] if mm.message.startswith("No demand set")]
 
 
-def test_missing_row_for_one_family_sets_status_but_pace_keeps_its_number(plant):
-    """Judgment call: one family missing (admin error) -> "No demand set" status; the other family's
-    demand still gives a pace number, and the missing family is named in the sentence."""
-    _first_shift_day(plant)
-    other = f.family("Core-L")
+def test_missing_row_for_one_family_keeps_status_from_pace_and_yield(plant):
+    """Eng review D7: a missing row counts like demand 0. Status is "No demand set" only when the
+    line's total required is 0; here Cores-S still requires 900, Sort made 144 (16%): Behind,
+    with the missing family named and the bottleneck sentence."""
+    hub = plant["hub"]
+    other = f.family("Cores-L")
     g.route(other, plant["s1"])
     g.route(other, plant["s2"])
+    g.demand(plant["line"], plant["family"], D, 900)
+    g.job(plant["s1"], plant["part"], plant["op"], _t(hub, D, 8), qty=300)
+    g.job(plant["s2"], plant["part"], plant["op"], _t(hub, D, 9), qty=144)
+    [row] = api.line_health([plant["line"]], D, as_of=_end_of(hub, D))
+    assert (row.pace.display, row.status) == ("16%", "Behind")
+    assert row.sentence == ("No demand set for Cores-L. Pace normal, yield in its usual range. "
+                            "Bottleneck: Sort at 16% (chosen from 2 of 2 stations).")
+    assert [(gp.family.name, gp.reason) for gp in row.no_demand] == [("Cores-L", "missing")]
+
+
+def test_station_without_routing_says_no_routing(plant):
+    _first_shift_day(plant)
+    extra = f.station(plant["line"], 3, "Pack")
+    g.job(extra, plant["part"], plant["op"], _t(plant["hub"], D, 9))
+    pack = api.station_rows(plant["line"], Window.for_shift("1st", D, as_of=_end_of(plant["hub"], D)))[2]
+    assert (pack.pace.display, pack.pace.reason, pack.pace.reason_text) == ("—", "no_routing", "no routing")
+
+
+def test_final_station_double_visit_divides_good_units(plant):
+    m.Routing.objects.filter(station=plant["s2"]).update(visit_count=2)
+    g.demand(plant["line"], plant["family"], D, 900)
+    g.job(plant["s2"], plant["part"], plant["op"], _t(plant["hub"], D, 9), qty=300)
     [row] = api.line_health([plant["line"]], D, shift="1st", as_of=_end_of(plant["hub"], D))
-    assert (row.pace.display, row.status) == ("90%", "No demand set")
-    assert row.sentence.startswith("No demand set for Core-L. ")
+    # 300 Sort transactions / 2 visits = 150 units of 300 required
+    assert (row.pace.good, row.pace.display) == (150, "50%")
+    sort = api.station_rows(plant["line"], Window.for_shift("1st", D, as_of=_end_of(plant["hub"], D)))[1]
+    assert (sort.pace.good, sort.pace.required, sort.pace.display) == (300, 600, "50%")
+
+
+def test_late_close_counts_for_the_shift_it_started_in(plant):
+    """User decision: start-time stamping. A job started at 14:00 in 1st and closed at 16:30 in 2nd
+    counts in 1st's totals; a past as_of before the close does not count it at all."""
+    hub = plant["hub"]
+    g.demand(plant["line"], plant["family"], D, 900)
+    g.job(plant["s2"], plant["part"], plant["op"], _t(hub, D, 14), complete=_t(hub, D, 16, 30), qty=300)
+    first, second, _ = api.shift_comparison([plant["line"]], D, as_of=_end_of(hub, D))[0].shifts
+    assert (first.pace.good, second.pace.good) == (300, 0)
+    [early] = api.line_health([plant["line"]], D, shift="1st", as_of=_t(hub, D, 16))
+    assert early.pace.good == 0
 
 
 # ---------------------------------------------------------------- yield and RTY
@@ -251,7 +300,8 @@ def test_yield_problem_status_and_sentence_against_14_day_baseline(plant):
     assert (row.pace_class, row.yield_class) == ("normal", "low")
     assert round(row.yield_baseline["mean"], 6) == 0.85 and row.yield_baseline["days"] == 14
     assert (row.status, row.status_key) == ("Yield problem", "yield_problem")
-    assert row.sentence == ("Pace normal, yield 10.0 pts under baseline, mostly Voids. "
+    # pace >= 100%: the doc's own template, verbatim (Component 6)
+    assert row.sentence == ("On pace, yield 10.0 pts under baseline, mostly Voids. "
                             "Look upstream at Injection 3, not at pace.")
     assert len(row.trend) == 14 and row.trend[-1].production_date == D
     assert row.trend_text == "Pace 14-day trend: 100% to 100%; yield 80% to 75%"
@@ -273,7 +323,7 @@ def test_final_station_not_count_trusted_suppresses_line_pace_only(plant):
 
 
 @pytest.mark.parametrize("pc,yc,expected", [
-    ("normal", "normal", "Pace and yield in their usual range."),
+    ("normal", "normal", "Pace normal, yield in its usual range."),
     ("normal", "low", "Pace normal, yield 4.0 pts under baseline, mostly Voids. Look upstream at Injection 3, not at pace."),
     ("normal", "high", "Pace normal, yield 4.0 pts above baseline."),
     ("low", "normal", "Pace 6.0 pts under its 14-day baseline, yield in its usual range."),
@@ -284,10 +334,30 @@ def test_final_station_not_count_trusted_suppresses_line_pace_only(plant):
     ("high", "high", "Pace 6.0 pts and yield 4.0 pts above baseline."),
 ])
 def test_nine_sentence_templates(pc, yc, expected):
+    """Line pace 95% (Behind): a normal pace class reads "Pace normal"."""
     pd = -0.06 if pc == "low" else 0.06
     yd = -0.04 if yc == "low" else 0.04
-    assert S.sentence(status_word="On pace", pace_class=pc, yield_class=yc, pace_delta=pd, yield_delta=yd,
-                      top_code="Voids", cause_station="Injection 3", bottleneck="Bottleneck: X.") == expected
+    assert S.sentence(status_word="Yield problem", pace_class=pc, yield_class=yc, pace_delta=pd, yield_delta=yd,
+                      top_code="Voids", cause_station="Injection 3", bottleneck="Bottleneck: X.",
+                      pace_value=0.95) == expected
+
+
+def test_doc_template_verbatim_when_on_pace():
+    assert S.DOC_TEMPLATE == ("On pace, yield {n} pts under baseline, mostly {top code}. "
+                              "Look upstream at {cause station}, not at pace.")
+    kw = dict(status_word="Yield problem", pace_class="normal", pace_delta=0.0, yield_delta=-0.04,
+              top_code="Voids", cause_station="Injection 3", pace_value=1.02)
+    assert S.sentence(yield_class="low", **kw) == (
+        "On pace, yield 4.0 pts under baseline, mostly Voids. Look upstream at Injection 3, not at pace.")
+    assert S.sentence(yield_class="normal", **kw) == "On pace, yield in its usual range."
+
+
+def test_sd_floor_keeps_a_flat_baseline_from_flagging_wobbles():
+    flat = [0.90] * 14
+    assert S.classify(0.897, flat, sd_floor=0.005) == "normal"  # 0.3 pts under: inside the 0.5-pt floor
+    assert S.classify(0.894, flat, sd_floor=0.005) == "low"
+    assert S.classify(0.897, flat) == "low"  # without the floor any wobble is "low"
+    assert S.baseline(flat, 0.02)["sd"] == 0.02
 
 
 def test_status_precedence_and_bottleneck_only_when_behind():
@@ -295,7 +365,10 @@ def test_status_precedence_and_bottleneck_only_when_behind():
     assert S.status(no_demand=False, pace_value=0.99, pace_suppressed=False, yield_class="low") == "Behind"
     assert S.status(no_demand=False, pace_value=1.0, pace_suppressed=False, yield_class="low") == "Yield problem"
     assert S.status(no_demand=False, pace_value=1.2, pace_suppressed=False, yield_class="high") == "On pace"
-    assert S.status(no_demand=False, pace_value=None, pace_suppressed=True, yield_class="low") == "Pace unavailable"
+    # pace has no number: No demand set > Yield problem > Pace unavailable
+    assert S.status(no_demand=False, pace_value=None, pace_suppressed=True, yield_class="low") == "Yield problem"
+    assert S.status(no_demand=False, pace_value=None, pace_suppressed=True, yield_class="normal") == "Pace unavailable"
+    assert S.status(no_demand=True, pace_value=None, pace_suppressed=False, yield_class="low") == "No demand set"
     kw = dict(pace_class="low", yield_class="normal", pace_delta=-0.1, yield_delta=0, bottleneck="Bottleneck: Sort.")
     assert S.sentence(status_word="Behind", **kw).endswith(" Bottleneck: Sort.")
     assert "Bottleneck" not in S.sentence(status_word="Yield problem", **kw)
@@ -378,6 +451,7 @@ def test_operator_groups_green_golden(crew):
     assert _row_tuple(rows[o["fast"].pk]) == (2, 168, 0, 24.0, 0.2, None, 30.0, 270.0, 2000, False, True)
     temp = rows[o["temp"].pk]
     assert (temp.unmapped, temp.operator, temp.hub_operator_id) == (True, None, "CT-901")
+    assert rows[o["new"].pk].hub_operator_id is None  # filled only for unmapped aliases
     assert _row_tuple(temp) == (1, 10, 0, None, None, None, 390.0, 270.0, None, None, True)
     # identity never leaves as a name: rows carry Operator objects only
     assert rows[o["new"].pk].operator == o["new"].operator
@@ -492,3 +566,36 @@ def test_no_shift_scheduled_and_not_started(plant):
     g.demand(plant["line"], plant["family"], D, 900)
     [row] = api.line_health([plant["line"]], D, shift="2nd", as_of=_t(hub, D, 14))
     assert (row.status_key, row.pace.reason_text) == ("not_started", "shift not started")
+
+
+def test_upstream_gap_uses_the_familys_routing(crew):
+    """Reviewer's probe: a part whose family is routed only through Sort has no upstream station,
+    so no upstream gap; Injection 3 runs, but not for that family."""
+    hub = crew["hub"]
+    solo_fam = f.family("Cores-X")
+    g.route(solo_fam, crew["s2"])
+    solo = f.part("C-7000", solo_fam, hub)
+    g.job(crew["s2"], solo, crew["ops"]["new"], _t(hub, D, 13), qty=5)
+    m.StationPartGrade.objects.create(station=crew["s2"], part=solo, grade="green", d_share=0, c_share=0,
+                                      o_share=0, job_count=100, days_of_history=40, computed_at=_t(hub, D, 0))
+    [grp] = api.operator_groups(crew["s2"], solo, crew["window"])
+    assert [r.upstream_gap_minutes for r in grp.rows] == [None]
+
+
+def test_upstream_gap_ignores_jobs_excluded_from_counts(crew):
+    # the feeder's last 6 completions (09:10-10:00) are excluded from counts: the gap grows by 60
+    for j in m.Job.objects.filter(station=crew["s1"]).order_by("-completed_at")[:6]:
+        j.excluded = j.excluded_from_counts = True
+        j.save()
+    [grp] = api.operator_groups(crew["s2"], crew["part"], crew["window"])
+    assert {r.upstream_gap_minutes for r in grp.rows} == {330.0}
+
+
+def test_forgotten_open_job_from_before_the_shift_covers_nothing(crew):
+    hub, new = crew["hub"], crew["ops"]["new"]
+    g.job(crew["s1"], crew["part"], new, _t(hub, D - timedelta(days=1), 9), open_=True)  # forgotten yesterday
+    g.job(crew["s2"], crew["part"], new, _t(hub, D, 14), open_=True)  # opened at 14:00, still open
+    [grp] = api.operator_groups(crew["s2"], crew["part"], crew["window"])
+    r = next(r for r in grp.rows if r.alias == new)
+    # 450 planned - 180 covered by closed jobs - 60 by the 14:00 open job, capped at the 15:00 end
+    assert r.transaction_gap_minutes == 210.0

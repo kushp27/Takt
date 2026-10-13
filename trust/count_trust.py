@@ -8,6 +8,12 @@ several confirmed count disputes counts once.
 
 Re-establishing trust is manual (a fresh 20-job physical sample, then the plant admin sets the
 flag with evidence); this module never sets the flag.
+
+For Lane D / the dispute flow: when a supervisor confirms a count dispute, call
+`auto_revoke(stations=[station])` (or `check_station(station)` to read the numbers first) so the
+station drops out of pace and operator rows at once instead of at the 02:30 nightly run.
+`check_station(station, as_of=None)` returns a RevocationCheck (jobs, confirmed_count_disputes,
+share, revoke) and changes nothing.
 """
 
 from dataclasses import dataclass
