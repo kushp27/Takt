@@ -427,6 +427,10 @@ class SiteSettings(models.Model):
     stale_after_minutes = models.PositiveIntegerField(default=30)
     upstream_gap_minutes = models.PositiveIntegerField(default=15)
     tenure_flag_days = models.PositiveIntegerField(default=90)
+    # Line Health classification (Component 6): a flat 14-day baseline must not make every
+    # wobble "low" or "high". The SD used for the ±1 SD band is at least this many points.
+    pace_sd_floor_pts = models.FloatField(default=2.0, help_text="Minimum SD, in percentage points, for pace.")
+    yield_sd_floor_pts = models.FloatField(default=0.5, help_text="Minimum SD, in percentage points, for yield.")
 
     class Meta:
         verbose_name = "site settings"

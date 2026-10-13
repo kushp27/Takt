@@ -20,7 +20,7 @@ def _form(s, **over):
     fields = ["grade_green_max_share", "grade_red_min_share", "duration_short_ratio", "duration_long_ratio",
               "end_of_shift_minutes", "clustered_timestamp_others", "grade_window_days",
               "count_dispute_revoke_share", "count_dispute_revoke_days", "stale_after_minutes",
-              "upstream_gap_minutes", "tenure_flag_days"]
+              "upstream_gap_minutes", "tenure_flag_days", "pace_sd_floor_pts", "yield_sd_floor_pts"]
     data = {f: getattr(s, f) for f in fields}
     data.update(over)
     return data
