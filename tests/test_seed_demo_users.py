@@ -75,8 +75,14 @@ def test_admin_can_map_aliases_but_not_open_jobs_or_disputes(monkeypatch, plant)
     c.force_login(get_user_model().objects.get(username="admin"))
     assert c.get("/admin/core/operatoralias/").status_code == 200
     assert c.get("/admin/core/operator/").status_code == 200
-    # Jobs and scrap aren't in the admin at all (404); if Lane A registers them, the
-    # "Takt admin" group still has no permission on them (403).
-    assert c.get("/admin/core/job/").status_code in (403, 404)
-    assert c.get("/admin/core/scrapevent/").status_code in (403, 404)
+    # Registered models outside configuration: refused.
     assert c.get("/admin/accounts/profile/").status_code == 403
+    assert c.get("/admin/auth/user/").status_code == 403
+    assert c.get(f"/admin/core/ingestrun/add/").status_code == 403  # view-only
+    # Operator data: no permission at all, whether or not the model is in the admin.
+    admin = get_user_model().objects.get(username="admin")
+    for perm in ("view_job", "change_job", "view_scrapevent", "change_scrapevent"):
+        assert not admin.has_perm(f"core.{perm}"), perm
+    for perm in ("view_dispute", "change_dispute"):
+        assert not admin.has_perm(f"disputes.{perm}"), perm
+    assert admin.has_perm("core.change_operatoralias") and admin.has_perm("core.change_sitesettings")
