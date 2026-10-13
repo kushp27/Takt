@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 
 from . import models
 
@@ -93,6 +93,22 @@ class TaktConfigAdmin(admin.ModelAdmin):
     list_display = ["production_date", "line", "family", "demand_units"]
     list_filter = ["line", "family"]
     date_hierarchy = "production_date"
+
+    MAX_LISTED = 10
+
+    def changelist_view(self, request, extra_context=None):
+        # Eng review D7 (T5): a missing TaktConfig row raises a red warning in the admin. Pace for
+        # that family adds 0 units required and Line Health lists it "no demand set".
+        from metrics.api import missing_demand
+
+        gaps = missing_demand(include_zero=False)
+        if gaps:
+            listed = "; ".join(f"{g.line} · {g.family} · {g.production_date:%a %b} {g.production_date.day}"
+                               for g in gaps[: self.MAX_LISTED])
+            more = f" and {len(gaps) - self.MAX_LISTED} more" if len(gaps) > self.MAX_LISTED else ""
+            messages.error(request, f"No demand set: {len(gaps)} scheduled family-day(s) in the last and next 7 "
+                                    f"days have no demand row, so pace shows — for them: {listed}{more}.")
+        return super().changelist_view(request, extra_context)
 
 
 @admin.register(models.ScrapCode)
