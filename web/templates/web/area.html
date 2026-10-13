@@ -1,0 +1,41 @@
+{% extends "web/base.html" %}{% load operator %}
+{% comment %}Area (design Component 6, D7): open-disputes strip (only when disputes are open), the area's Line
+Health rows, then the 3-shift comparison. The header carries the open-dispute count badge (eng review D6).{% endcomment %}
+{% block title %}{{ area.name }}{% endblock %}
+{% block content %}
+<div class="screen" {% page_hx_vals %}>
+  <div class="page-head">
+    <h1>{{ area.name }}</h1>
+    {% if summary and summary.count %}<a class="count-badge" href="{{ queue_url }}" id="area-dispute-badge">{{ summary.count }} open dispute{{ summary.count|pluralize }}{% if summary.overdue %} · <span class="overdue-label">{{ summary.overdue }} overdue</span>{% endif %}</a>{% endif %}
+    <p class="window-label">{{ window.label }}</p>
+  </div>
+  {% include "web/partials/window_picker.html" %}
+  {% if other_areas %}<p class="subtle no-print">Other areas: {% for a in other_areas %}<a href="{% url 'area' a.pk %}">{{ a.name }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+  <p class="phone-note">Open on a desktop to dispute or drill down.</p>
+
+  {% if summary and summary.count %}
+  <section class="strip disputes-strip" aria-labelledby="open-disputes-h">
+    <h2 id="open-disputes-h">Open disputes</h2>
+    <p>{{ summary.count }} open{% if summary.overdue %} · <span class="overdue-label">Overdue: {{ summary.overdue }}</span>{% else %} · none overdue{% endif %} · oldest {{ summary.oldest_age }} shift{{ summary.oldest_age|pluralize }} old · <a href="{{ queue_url }}">Review</a></p>
+  </section>
+  {% endif %}
+
+  <h2 class="section-title">Lines</h2>
+  {% if rows %}{% include "web/partials/line_rows.html" with caption_prefix=area.name %}{% else %}<p>No lines in this area yet.</p>{% endif %}
+
+  {% if comparison %}
+  <h2 class="section-title" id="shift-comparison-h">Shift comparison</h2>
+  <table class="data shift-comparison" aria-labelledby="shift-comparison-h">
+    <caption>Pace and yield by shift, {{ comparison_date|date:"D M j" }}</caption>
+    <thead>
+      <tr><th scope="col">Line</th>{% for n in comparison_names %}<th scope="col">{{ n }} shift pace</th><th scope="col">{{ n }} shift yield</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+    {% for line, cells in comparison %}
+      <tr><th scope="row">{{ line.name }}</th>{% for c in cells %}{% if c %}<td title="{{ c.pace.tooltip }}">{{ c.pace.throughput_display }}</td><td>{{ c.yield_.display }}</td>{% else %}<td>—</td><td>—</td>{% endif %}{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

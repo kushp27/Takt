@@ -56,13 +56,46 @@ SWEEP_CASES = [
     ),
     # --- Lane D: the real screens. Line Health (/line/) and its station drill-down render no operator
     # identity and are not marked: discovery probes them as unmarked URLs.
-    # Operator drill-down at one station (from Line Health). A lead sees only their shift.
+    # Area (supervisor's home): line-level only, but it mints the token its operator drill-down reuses.
+    SweepCase(
+        "area",
+        kwargs=lambda w: {"area_id": w.area_in.pk},
+        query=lambda w: {"date": w.today.isoformat()},
+        expected=lambda w: set(),
+    ),
+    # Operator drill-down at one station (from Line Health or Area). A lead sees only their shift.
     SweepCase(
         "station_operators",
         kwargs=lambda w: {"station_id": w.st_a1.pk},
         query=lambda w: {"date": w.today.isoformat()},
         expected=lambda w: w.in_scope(station="st_a1"),
         partial=True,
+        parent="area",
+    ),
+    # Dispute queue (supervisor): leads raise disputes on My Shift but never decide them.
+    SweepCase(
+        "dispute_queue",
+        kwargs=lambda w: {"area_id": w.area_in.pk},
+        expected=lambda w: {"zeb"},
+        lead_may_refuse=True,
+    ),
+    SweepCase(
+        "dispute_detail",
+        kwargs=lambda w: {"area_id": w.area_in.pk, "dispute_id": w.dispute.pk},
+        expected=lambda w: {"zeb"},
+        lead_may_refuse=True,
+        partial=True,
+        parent="dispute_queue",
+    ),
+    SweepCase(
+        "dispute_decide",
+        kwargs=lambda w: {"area_id": w.area_in.pk, "dispute_id": w.dispute.pk},
+        method="post",
+        data=lambda w: {"decision": "confirm", "note": "Traveler shows 8."},
+        expected=lambda w: {"zeb"},
+        lead_may_refuse=True,
+        partial=True,
+        parent="dispute_queue",
     ),
 ]
 

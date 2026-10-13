@@ -1,0 +1,25 @@
+{% extends "web/base.html" %}{% load operator %}
+{% comment %}Dispute queue (design review D8): oldest first, overdue submissions on top with the word "Overdue";
+rows grouped by submission (eng re-review D4), each expanding inline to the MES values and Confirm / Reject.{% endcomment %}
+{% block title %}Disputes · {{ area.name }}{% endblock %}
+{% block content %}
+<div class="screen" {% page_hx_vals %}>
+  <div class="page-head">
+    <h1>Disputes · {{ area.name }}</h1>
+    <p class="window-label">Open disputes, oldest first</p>
+  </div>
+  <p class="phone-note">Open on a desktop to dispute or drill down.</p>
+  {% gate1_notice %}
+  {% if subs %}
+  <table class="data queue">
+    <caption>Open disputes in {{ area.name }}, oldest first; overdue at the top. Confirm and Reject both need a note, which the lead sees.</caption>
+    <thead>
+      <tr><th scope="col">Age</th><th scope="col">Station and part</th><th scope="col">Job ID and time</th><th scope="col">Operator</th><th scope="col">Raised by</th><th scope="col">Reason</th><th scope="col"><span class="visually-hidden">Decision</span></th></tr>
+    </thead>
+    {% for sub in subs %}{% include "disputes/partials/submission.html" %}{% endfor %}
+  </table>
+  {% else %}
+  <p>No open disputes in {{ area.name }}.</p>
+  {% endif %}
+</div>
+{% endblock %}

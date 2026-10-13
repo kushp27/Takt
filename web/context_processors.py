@@ -39,4 +39,8 @@ def _items(user):
         items.append({"key": "admin", "label": "Configuration", "url": reverse("admin:index")})
     elif role_scope.can_see_operator_metrics(user):
         items.append({"key": "line_health", "label": "Line Health", "url": reverse("line_health")})
+        items.append({"key": "area", "label": "Area", "url": reverse("area_home")})
+        if role in DECIDER_ROLES:
+            items.append({"key": "disputes", "label": "Disputes", "url": reverse("disputes_home"),
+                          "count": open_dispute_count(user)})
     return items

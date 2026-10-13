@@ -27,12 +27,15 @@ from trust.count_trust import auto_revoke
 
 from .models import Dispute
 
+# DEVIATION: "older than 2 shifts" is not defined further. Age = the number of scheduled shifts of the job's
+# hub that have STARTED since the dispute was raised; overdue when that is more than 2 (raised during 1st
+# shift: the 2nd and 3rd start, then overdue when the next 1st starts). Same rule for the strip and queue.
 OVERDUE_AFTER_SHIFTS = 2  # eng review D6: "disputes older than 2 shifts show red"
 AGE_LOOKBACK_DAYS = 60
 CONFIRM, REJECT = "confirm", "reject"
 NOTE_REQUIRED = "A note is required to confirm or reject."
-# Reasons whose confirmation means the count itself was wrong (default for the "also remove from
-# counts" box; the supervisor can change it).
+# DEVIATION: the doc leaves "the count itself is wrong" to the supervisor. The Confirm form shows it as a
+# checkbox, pre-ticked only for "wrong quantity"; the supervisor can change it per decision.
 COUNT_REASONS = {Dispute.WRONG_QUANTITY}
 
 

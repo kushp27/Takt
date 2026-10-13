@@ -91,7 +91,15 @@ def test_lead_assignment(w):
     assert scope.lead_assignment(w.users["sup_in"]) is None
 
 
-def test_own_area_url_falls_back_without_an_area_url(w):
+def test_own_area_url_points_at_the_area_screen(w):
+    """Lane D named the area screen 'area' (kwarg area_id): the D13 link goes there."""
+    assert scope.own_area_url(w.users["sup_in"]) == f"/area/{w.area_in.pk}/"
+    assert scope.own_area_url(w.users["lead_own"]) == f"/area/{w.area_in.pk}/"
+    assert scope.own_area_url(w.users["admin"]) == "/admin/"
+
+
+def test_own_area_url_falls_back_without_an_area_url(w, settings):
+    settings.TAKT_AREA_URL_NAME = "no_such_url"
     assert scope.own_area_url(w.users["sup_in"]) == "/"
     assert scope.own_area_url(w.users["admin"]) == "/admin/"
 
@@ -189,7 +197,7 @@ def test_htmx_refusal_is_an_inline_d13_fragment(w):
 
 def test_base_template_swaps_403_fragments_and_shows_load_errors(client, w):
     client.force_login(w.users["sup_in"])
-    body = client.get("/").content.decode()
+    body = client.get("/", follow=True).content.decode()  # / -> the supervisor's Area
     assert "htmx:beforeSwap" in body and "status === 403" in body and 'getResponseHeader("X-Takt-Inline")' in body
     assert "htmx:responseError" in body and "Couldn't load stations." in body and "Retry" in body
 

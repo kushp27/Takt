@@ -25,7 +25,27 @@ def home(request):
         return redirect("line_health")
     if role == Profile.ADMIN:
         return redirect("admin:index")
-    if role in (Profile.SUPERVISOR, Profile.LEAD):
+    if role == Profile.SUPERVISOR:
+        area = role_scope.own_area(request.user)
+        if area is not None:
+            return redirect("area", area_id=area.pk)
+        return _home_page(request, "No area is assigned to you yet. Ask the Takt builder to add one.")
+    if role == Profile.LEAD:
         return _home_page(request, "Your screen is not built yet.")
     return _home_page(request, "Your account has no Takt role yet. Ask the Takt builder to set one.")
 
+
+@login_required
+def area_home(request):
+    """/area/: the user's own area (the D13 "back to your area" target)."""
+    return redirect(role_scope.own_area_url(request.user))
+
+
+@login_required
+def disputes_home(request):
+    """/disputes/: the dispute queue for the user's own area."""
+    area = role_scope.own_area(request.user)
+    if area is None or role_scope.role_of(request.user) not in (role_scope.BUILDER, Profile.OPS_MANAGER,
+                                                               Profile.SUPERVISOR):
+        return redirect("home")
+    return redirect("dispute_queue", area_id=area.pk)
