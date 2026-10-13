@@ -26,7 +26,7 @@ urlpatterns = [
     path("shift/", my_shift.my_shift_home, name="my_shift_home"),
     path("area/<int:area_id>/shift/", my_shift.my_shift, name="my_shift"),
     path("area/<int:area_id>/shift/table/", my_shift.my_shift_table, name="my_shift_table"),
-    path("area/<int:area_id>/shift/jobs/<int:alias_id>/", my_shift.my_shift_jobs, name="my_shift_jobs"),
+    path("area/<int:area_id>/shift/jobs/<str:ref>/", my_shift.my_shift_jobs, name="my_shift_jobs"),
     path("area/<int:area_id>/shift/disputes/", my_shift.my_shift_dispute, name="my_shift_dispute"),
     path("area/<int:area_id>/shift/print/", my_shift.print_sheet, name="print_sheet"),
 ]

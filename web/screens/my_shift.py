@@ -125,8 +125,8 @@ def _body(request, area, shift, window, state):
                                  f"{urlencode({'date': (last or window.date_to).isoformat(), 'days': 14, 'shift_id': shift.pk})}"),
         }
         return {"no_shift": no_shift, "blocks": [], "conversation": [], "start": None}
-    blocks = station_blocks(area, window.metrics)
-    conversation = api.worth_a_conversation(Scope.for_area(area), window.metrics) if blocks else []
+    blocks = station_blocks(area, window.metrics, shift.hub)
+    conversation = api.conversation_from_groups([g for _, groups in blocks for g in groups])
     start = None
     # DEVIATION: "a link to the last shift's sheet" is read as the previous run of the SAME shift (a lead
     # may only view their own shift), not whichever shift ran just before.
@@ -193,9 +193,14 @@ def my_shift_table(request, area_id):
     })
 
 
-def _job_items(area, alias, window):
-    """The person's jobs in the window at this area's lines (D14), each with `disputable`/`open_dispute`."""
-    items = api.job_list(Scope(lines=tuple(area_lines(area)), alias=alias), window.metrics)
+def _job_items(area, shift, person, window):
+    """The person's jobs in this shift (by shift pk, so another hub's same-named shift never leaks in) at
+    this area's lines on the shift's hub (D14), each with `disputable` / `open_dispute`."""
+    lines = tuple(ln for ln in area_lines(area) if ln.hub_id == shift.hub_id)
+    if not lines:
+        return []
+    scope = Scope(lines=lines, alias=person) if isinstance(person, OperatorAlias) else Scope(lines=lines, operator=person)
+    items = [i for i in api.job_list(scope, window.metrics) if i.job.shift_id == shift.pk]
     open_ids = set(Dispute.objects.filter(job__in=[i.job for i in items], status=Dispute.OPEN)
                    .values_list("job_id", flat=True))
     for i in items:
@@ -204,14 +209,10 @@ def _job_items(area, alias, window):
     return items
 
 
-def _alias(raw):
-    return OperatorAlias.objects.select_related("operator").filter(pk=int(raw)).first() if str(raw).isdigit() else None
-
-
-def _job_list_response(request, ctx, area, shift, window, alias, items, error="", status=200, checked=()):
+def _job_list_response(request, ctx, area, shift, window, person, ref, items, error="", status=200, checked=()):
     return render(request, "web/partials/job_list.html", {
-        "takt_page": ctx, "area": area, "shift": shift, "window": window, "alias": alias, "items": items,
-        "reasons": Dispute.REASON_CHOICES, "error": error, "checked": set(checked),
+        "takt_page": ctx, "area": area, "shift": shift, "window": window, "person": person, "ref": ref,
+        "items": items, "reasons": Dispute.REASON_CHOICES, "error": error, "checked": set(checked),
         "any_disputable": any(i.disputable for i in items),
         "posted_reason": request.POST.get("reason", ""), "posted_text": request.POST.get("reason_text", ""),
     }, status=status)
@@ -219,17 +220,23 @@ def _job_list_response(request, ctx, area, shift, window, alias, items, error=""
 
 @operator_bearing
 @area_scope_required("area_id", shift_param="shift_id")
-def my_shift_jobs(request, area_id, alias_id):
+def my_shift_jobs(request, area_id, ref):
     """"This looks wrong" / "N jobs excluded": the operator's job list for the shift, inline (D14, D23).
-    Excluded jobs stay visible, struck through, with the reason, who confirmed it and when."""
+    Excluded jobs stay visible, struck through, with the reason, who confirmed it and when.
+
+    `ref` is the opaque per-page reference from {% operator_ref %} (D12: no pk in the HTML). It resolves
+    only through the page's token: without it, letter mode answers HX-Refresh and named mode refuses."""
     area = get_object_or_404(Area, pk=area_id)
     shift = _shift_or_none(request)
-    alias = _alias(alias_id)
-    if shift is None or alias is None:
+    if shift is None:
         return render_out_of_scope(request)
     window, _ = windows.my_shift_window(request, shift)
     ctx = page_context(request, _page_scope(area, shift, window), parents=(MY_SHIFT_VIEW,))
-    return _job_list_response(request, ctx, area, shift, window, alias, _job_items(area, alias, window))
+    person = ctx.resolve(ref)
+    if person is None:
+        return render_out_of_scope(request)
+    return _job_list_response(request, ctx, area, shift, window, person, ref,
+                              _job_items(area, shift, person, window))
 
 
 @operator_bearing
@@ -240,16 +247,19 @@ def my_shift_dispute(request, area_id):
 
     DEVIATION: the doc has the lead raise disputes; it does not forbid the supervisor, ops manager or builder
     who opens the same My Shift. Anyone who may view this shift may raise one; deciding stays with the
-    builder, ops manager and supervisors (the queue), and leads never decide."""
+    builder, ops manager and supervisors (the queue), and nobody but the builder decides their own."""
     area = get_object_or_404(Area, pk=area_id)
     shift = _shift_or_none(request)
-    alias = _alias(request.POST.get("alias_id", ""))
-    if shift is None or alias is None:
+    if shift is None:
         return render_out_of_scope(request)
     window, _ = windows.my_shift_window(request, shift)
     # page_context before any write: a rejected token in letter mode answers HX-Refresh, nothing saved.
     ctx = page_context(request, _page_scope(area, shift, window), parents=(MY_SHIFT_VIEW,))
-    items = _job_items(area, alias, window)
+    ref = request.POST.get("ref", "")
+    person = ctx.resolve(ref)
+    if person is None:
+        return render_out_of_scope(request)
+    items = _job_items(area, shift, person, window)
     allowed = {i.job.pk: i.job for i in items}
     ticked = [int(x) for x in request.POST.getlist("job") if str(x).isdigit()]
     try:
@@ -258,7 +268,8 @@ def my_shift_dispute(request, area_id):
         rows = disputes.submit(request.user, [allowed[pk] for pk in ticked], request.POST.get("reason", ""),
                                request.POST.get("reason_text", ""))
     except disputes.DisputeError as e:
-        return _job_list_response(request, ctx, area, shift, window, alias, items, error=str(e), checked=ticked)
+        return _job_list_response(request, ctx, area, shift, window, person, ref, items, error=str(e),
+                                  checked=ticked)
     mine = _my_disputes(request.user, area, shift)
     response = render(request, "web/partials/dispute_submitted.html", {
         "takt_page": ctx, "count": len(rows), "my_disputes": mine, "oob": True,
@@ -284,7 +295,7 @@ def print_sheet(request, area_id):
     ctx = page_context(request, _page_scope(area, shift, window))
     lines = area_lines(area)
     blocks = []
-    for st, groups in station_blocks(area, window.metrics):
+    for st, groups in station_blocks(area, window.metrics, shift.hub):
         shown = [g for g in groups if g.cell.on_print_sheet]
         totals = (sum(g.jobs or 0 for g in shown), sum(g.quantity or 0 for g in shown)) if shown else None
         blocks.append({"station": st, "groups": groups, "totals": totals})

@@ -71,6 +71,14 @@ def operators_sorted(context, rows, attr=None, drop_hidden=True):
     return page.sorted(list(rows), key=get, drop_hidden=drop_hidden)
 
 
+@register.simple_tag(takes_context=True)
+def operator_ref(context, operator_or_alias):
+    """{% operator_ref row.alias as ref %}: the opaque per-page reference for URLs, values and ids.
+    Never put an alias or operator pk in HTML (D12)."""
+    page = _page(context)
+    return page.ref(operator_or_alias) if page is not None else ""
+
+
 @register.inclusion_tag("partials/gate1_notice.html", takes_context=True)
 def gate1_notice(context):
     """D12: the persistent notice above any anonymized table. Renders nothing in named mode."""

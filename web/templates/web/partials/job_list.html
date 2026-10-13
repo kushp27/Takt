@@ -3,13 +3,14 @@ The operator's job list for the shift, inline under their row (design review D14
 jobs and picks a reason: wrong quantity, wrong operator, job not mine, time looks wrong, or other with text.
 Excluded jobs stay visible, struck through, with the reason, who confirmed it and when (D23). The form carries
 data-takt-form, so the live Refresh never swaps over it (eng re-review D5). Context: alias, items, reasons,
-area, shift, window, error, checked.
-{% endcomment %}{% with fid=alias.pk|dash:window.date_to|slugify %}
+area, shift, window, error, checked; person and ref (the opaque per-page
+reference from {% operator_ref %}, never a pk).
+{% endcomment %}{% with fid=ref %}
 <form class="dispute-form job-list" data-takt-form method="post" hx-post="{% url 'my_shift_dispute' area.pk %}" hx-target="this" hx-swap="outerHTML" aria-labelledby="jl-h-{{ fid }}">
-  <input type="hidden" name="alias_id" value="{{ alias.pk }}">
+  <input type="hidden" name="ref" value="{{ ref }}">
   <input type="hidden" name="shift_id" value="{{ shift.pk }}">
   <input type="hidden" name="date" value="{{ window.date_to.isoformat }}">
-  <h4 class="panel-heading" id="jl-h-{{ fid }}" tabindex="-1">Jobs for {% operator alias %} · {{ window.label }}</h4>
+  <h4 class="panel-heading" id="jl-h-{{ fid }}" tabindex="-1">Jobs for {% operator person %} · {{ window.label }}</h4>
   {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
   <table class="data jobs">
     <caption class="visually-hidden">Jobs in this shift. Tick the ones that look wrong.</caption>

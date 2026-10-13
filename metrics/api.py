@@ -874,15 +874,24 @@ def worth_a_conversation(scope, window):
         raise ValueError("worth_a_conversation is never plant-wide: give lines (an area) or stations")
     out = []
     for st in scope.station_list():
-        for grp in operator_groups(st, scope.part, window):
-            if not grp.cell.show_comparisons:
-                continue
-            cands = [r for r in grp.rows if not r.unmapped and r.rate_vs_median is not None
-                     and r.rate_vs_median <= -WORTH_A_CONVERSATION_MIN_SHORTFALL]
-            cands.sort(key=lambda r: (r.rate_vs_median, r.alias.pk))
-            items = [ConversationItem(r, st, grp.part, _reasons(r, st)) for r in cands[:WORTH_A_CONVERSATION_LIMIT]]
-            if items:
-                out.append(ConversationGroup(st, grp.part, items))
+        out += conversation_from_groups(operator_groups(st, scope.part, window))
+    return out
+
+
+def conversation_from_groups(groups):
+    """The D5 selection over OperatorGroups a caller already has (My Shift computes them for its table):
+    up to 3 mapped operators per GREEN group at least 10% under the median. Returns [ConversationGroup]."""
+    out = []
+    for grp in groups:
+        if not grp.cell.show_comparisons:
+            continue
+        cands = [r for r in grp.rows if not r.unmapped and r.rate_vs_median is not None
+                 and r.rate_vs_median <= -WORTH_A_CONVERSATION_MIN_SHORTFALL]
+        cands.sort(key=lambda r: (r.rate_vs_median, r.alias.pk))
+        items = [ConversationItem(r, grp.station, grp.part, _reasons(r, grp.station))
+                 for r in cands[:WORTH_A_CONVERSATION_LIMIT]]
+        if items:
+            out.append(ConversationGroup(grp.station, grp.part, items))
     return out
 
 
@@ -954,7 +963,7 @@ def missing_demand(lines=None, date_from=None, date_to=None, *, include_zero=Tru
 
 
 __all__ = [
-    "line_health", "station_rows", "operator_groups", "worth_a_conversation", "job_list", "shift_comparison",
+    "line_health", "station_rows", "operator_groups", "worth_a_conversation", "conversation_from_groups", "job_list", "shift_comparison",
     "missing_demand", "Window", "Scope", "Pace", "Yield", "LineYield", "TopScrap", "Bottleneck", "DemandGap",
     "TrendPoint", "LineHealthRow", "StationRow", "PartRow", "BatchStats", "OperatorRow", "OperatorGroup",
     "Reason", "ConversationItem", "ConversationGroup", "JobItem", "ShiftCell", "ShiftComparisonRow", "DASH",

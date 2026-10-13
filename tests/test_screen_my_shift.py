@@ -24,7 +24,7 @@ from core import models as m
 from disputes import service
 from disputes.models import Dispute
 from tests.identity_world import set_gate1
-from tests.screen_world import D, NAMES, build, pin, t
+from tests.screen_world import D, NAMES, build, pin, ref, t
 
 TOKEN_RE = re.compile(r'hx-vals="\{&quot;' + TOKEN_PARAM + r'&quot;: &quot;([^&]+)&quot;\}"')
 
@@ -70,7 +70,7 @@ def test_worth_a_conversation_list(p, client):
     items = [_text(li) for li in re.findall(r"<li>(.*?)</li>", block, re.S)]
     assert items == ["Nerissa Quell · Sort · −20% vs median · tenure < 90 days · upstream output gap 270 min · "
                      "270 min with no transaction"]
-    assert html.index("Worth a conversation") < html.index('<table class="data operators"')
+    assert html.index("Worth a conversation") < html.index('<table class="data operators')
 
 
 def test_conversation_list_is_never_on_a_non_green_group(p, client):
@@ -81,7 +81,7 @@ def test_conversation_list_is_never_on_a_non_green_group(p, client):
 
 def test_grouped_by_station_and_part_rows_a_to_z(p, client):
     html = _page(client, p, p["users"]["builder"])
-    tables = re.findall(r'<table class="data operators" id="group-(\d+)-(\d+)">(.*?)</table>', html, re.S)
+    tables = re.findall(r'<table class="data operators[^"]*" id="group-(\d+)-(\d+)">(.*?)</table>', html, re.S)
     assert [(int(s), int(pt)) for s, pt, _ in tables] == [(p["s1"].pk, p["part"].pk), (p["s2"].pk, p["part"].pk)]
     sort_body = tables[1][2]
     assert sort_body.count("<tbody>") == 1
@@ -121,15 +121,15 @@ def test_matrix_columns_on_my_shift(p, client):
     assert "Upstream output gap" in sort and "Tenure" in sort and "This looks wrong" in sort
 
 
-def _jobs_url(p, key):
-    return f"/area/{p['area'].pk}/shift/jobs/{p['ops'][key].pk}/"
+def _jobs_url(p, key, html, user=None):
+    return f"/area/{p['area'].pk}/shift/jobs/{ref(user or p['users']['lead'], html, p['ops'][key])}/"
 
 
 def test_this_looks_wrong_opens_the_job_list(p, client):
     html = _page(client, p, p["users"]["lead"])
     assert re.search(r'<button type="button" class="button-link drill-toggle dispute-toggle" hx-get="'
-                     + re.escape(_jobs_url(p, "new")) + r'\?date=2026-09-15&amp;shift_id=\d+"', html)
-    resp = client.get(_jobs_url(p, "new"), {"shift_id": p["first"].pk, "date": "2026-09-15",
+                     + re.escape(_jobs_url(p, "new", html)) + r'\?date=2026-09-15&amp;shift_id=\d+"', html)
+    resp = client.get(_jobs_url(p, "new", html), {"shift_id": p["first"].pk, "date": "2026-09-15",
                                             TOKEN_PARAM: _token(html)}, HTTP_HX_REQUEST="true")
     jl = resp.content.decode()
     assert re.search(r'<form class="dispute-form job-list" data-takt-form method="post" hx-post="/area/\d+/shift/disputes/"', jl)
@@ -152,7 +152,7 @@ def test_three_job_dispute_submission_and_my_disputes(p, client, monkeypatch):
                                  shift=p["first"], production_date=D)
     jobs = p["jobs"]["mid"] + [extra]
     resp = client.post(f"/area/{p['area'].pk}/shift/disputes/", {
-        "shift_id": p["first"].pk, "date": "2026-09-15", "alias_id": p["ops"]["mid"].pk,
+        "shift_id": p["first"].pk, "date": "2026-09-15", "ref": ref(lead, html, p["ops"]["mid"]),
         "job": [j.pk for j in jobs], "reason": "wrong_quantity", TOKEN_PARAM: token}, HTTP_HX_REQUEST="true")
     assert resp.status_code == 200
     out = resp.content.decode()
@@ -176,7 +176,7 @@ def test_three_job_dispute_submission_and_my_disputes(p, client, monkeypatch):
 def test_dispute_errors_rerender_the_form(p, client):
     html = _page(client, p, p["users"]["lead"])
     resp = client.post(f"/area/{p['area'].pk}/shift/disputes/", {
-        "shift_id": p["first"].pk, "date": "2026-09-15", "alias_id": p["ops"]["new"].pk,
+        "shift_id": p["first"].pk, "date": "2026-09-15", "ref": ref(p["users"]["lead"], html, p["ops"]["new"]),
         "job": [p["jobs"]["new"][0].pk], "reason": "other", "reason_text": "", TOKEN_PARAM: _token(html)},
         HTTP_HX_REQUEST="true")
     out = resp.content.decode()
@@ -184,7 +184,7 @@ def test_dispute_errors_rerender_the_form(p, client):
     assert Dispute.objects.count() == 0
     # a job from someone else's list is refused
     resp = client.post(f"/area/{p['area'].pk}/shift/disputes/", {
-        "shift_id": p["first"].pk, "date": "2026-09-15", "alias_id": p["ops"]["new"].pk,
+        "shift_id": p["first"].pk, "date": "2026-09-15", "ref": ref(p["users"]["lead"], html, p["ops"]["new"]),
         "job": [p["jobs"]["mid"][0].pk], "reason": "wrong_quantity", TOKEN_PARAM: _token(html)},
         HTTP_HX_REQUEST="true")
     assert "Tick jobs from this list." in resp.content.decode() and Dispute.objects.count() == 0
@@ -197,7 +197,7 @@ def test_excluded_jobs_link_and_strikethrough(p, client):
     service.decide(d, sup, service.CONFIRM, "Recounted: 30.", affects_counts=False, now=t(p["hub"], 15, 10))
     html = _page(client, p, p["users"]["lead"])
     assert re.search(r'class="button-link drill-toggle excluded-link"[^>]*>1 job excluded</button>', html)
-    jl = client.get(_jobs_url(p, "new"), {"shift_id": p["first"].pk, "date": "2026-09-15",
+    jl = client.get(_jobs_url(p, "new", html), {"shift_id": p["first"].pk, "date": "2026-09-15",
                                           TOKEN_PARAM: _token(html)}, HTTP_HX_REQUEST="true").content.decode()
     row = re.search(r'<tr class="job-excluded">(.*?)</tr>', jl, re.S).group(1)
     assert "Excluded: wrong quantity, confirmed by J. Ortiz, Tue 3:10 PM" in _text(row)
@@ -223,7 +223,7 @@ def test_e_t4_live_notice_wiring_with_an_open_dispute_form(p, client):
     assert f"refresh_url=%2Farea%2F{p['area'].pk}%2Fshift%2Ftable%2F%3Fdate%3D2026-09-15%26shift_id%3D{p['first'].pk}" in poll
     assert re.search(r'<script src="[^"]*ops/freshness\.js" defer></script>', html)
     # open a dispute form: it is marked data-takt-form and lives inside #shift-table (the Refresh target)
-    jl = client.get(_jobs_url(p, "new"), {"shift_id": p["first"].pk, "date": "2026-09-15",
+    jl = client.get(_jobs_url(p, "new", html), {"shift_id": p["first"].pk, "date": "2026-09-15",
                                           TOKEN_PARAM: _token(html)}, HTTP_HX_REQUEST="true").content.decode()
     assert "<form class=\"dispute-form job-list\" data-takt-form" in jl
     table = re.search(r'<section id="shift-table".*', html, re.S).group(0)
@@ -260,7 +260,7 @@ def test_no_shift_scheduled_today(p, client, monkeypatch):
     assert "No shift scheduled today" in html
     assert re.search(r'<a href="/area/\d+/shift/\?shift_id=\d+&amp;date=2026-09-14">Last shift</a>', html)
     assert re.search(r'<a href="/line/\?date=2026-09-14&amp;days=14&amp;shift_id=\d+">14-day view</a>', html)
-    assert "<table class=\"data operators\"" not in html
+    assert "<table class=\"data operators" not in html
 
 
 def test_other_leads_shift_is_refused(p, client):

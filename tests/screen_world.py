@@ -89,5 +89,17 @@ def build():
 NAMES = ["Fenwick Oddsworth", "Mortimer Ashgrove", "Nerissa Quell"]
 
 
+def ref(user, html, alias):
+    """The opaque per-page reference (PageContext.ref) to `alias`'s person on the page `html` rendered for
+    `user`: what the page's own buttons and forms carry instead of a pk (D12)."""
+    import re
+
+    from accounts.policy import TOKEN_PARAM, read_token, ref_for_key
+
+    token = re.search(r'hx-vals="\{&quot;' + TOKEN_PARAM + r'&quot;: &quot;([^&]+)&quot;\}"', html).group(1)
+    key = f"o{alias.operator_id}" if alias.operator_id else f"a{alias.pk}"
+    return ref_for_key(read_token(token, user)["n"], key)
+
+
 def pin(monkeypatch, instant):
     monkeypatch.setattr("ops.freshness.current_time", lambda: instant)

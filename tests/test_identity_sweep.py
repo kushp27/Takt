@@ -61,7 +61,7 @@ from django.test import Client
 from django.urls import URLResolver, get_resolver, reverse
 
 from accounts.decorators import OPERATOR_BEARING_ATTR
-from accounts.policy import GATE1_NOTICE, TOKEN_PARAM, _letters
+from accounts.policy import GATE1_NOTICE, TOKEN_PARAM, _letters, read_token
 from tests.identity_world import ROLES, World, build_world, set_gate1
 from tests.sweep_registry import (
     DISCOVERY_KWARGS,
@@ -94,14 +94,21 @@ def client_for(world, role):
     return c
 
 
-def do_request(client, world, case, token=None):
-    url = reverse(case.url_name, kwargs=case.kwargs(world))
+def do_request(client, world, case, token=None, user=None):
+    kwargs, data = dict(case.kwargs(world)), dict(case.data(world))
+    payload = read_token(token, user) if (token and user is not None and case.needs_token) else None
+    if payload:
+        if case.token_kwargs:
+            kwargs.update(case.token_kwargs(world, payload))
+        if case.token_data:
+            data.update(case.token_data(world, payload))
+    url = reverse(case.url_name, kwargs=kwargs)
     params = dict(case.query(world))
     if token:
         params[TOKEN_PARAM] = token
     headers = {"HX-Request": "true"} if case.partial else {}
     if case.method == "post":
-        return client.post(url, {**case.data(world), **params}, headers=headers)
+        return client.post(url, {**data, **params}, headers=headers)
     return client.get(url, params, headers=headers)
 
 
@@ -163,6 +170,8 @@ def check(world, case, role, gate1, resp, how=""):
 
     # ---- status oracle
     expect = expected_status(world, case, role)
+    if case.needs_token and mode == "named" and how in ("no-token", "forged-token") and expect == "200":
+        expect = "403"  # a ref-addressed partial can't be addressed without its page token
     refresh = resp.get("HX-Refresh") == "true"
     # A partial without a usable page token must not mint fresh letters (D3 failure mode).
     expect_refresh = (case.partial and mode == "letter" and how in ("no-token", "forged-token")
@@ -216,6 +225,11 @@ def check(world, case, role, gate1, resp, how=""):
 
     letters = LETTER_RE.findall(body)
     if mode == "letter":
+        # D12: no alias or operator pk may track a person across pages: not in URLs, ids, values or data.
+        for pattern in (r"/jobs/\d+/", r'name="(?:alias|operator)_id"', r"data-(?:alias|operator)",
+                        r'id="jobs-[^"]*-\d+"', r'id="jl-h-\d'):
+            if re.search(pattern, body):
+                errs.append(f"{tag} a stable operator/alias pk in letter-mode HTML: {re.search(pattern, body).group(0)!r}")
         distinct = {letter for _, letter in letters}
         if len(distinct) != len(visible):
             errs.append(f"{tag} expected {len(visible)} distinct letters, saw {sorted(distinct)}")
@@ -272,7 +286,8 @@ def test_sweep(world, case, gate1):
             if parent_resp.status_code == 200 and token is None:
                 errs.append(f"[{case.id}] parent {case.parent} rendered without {{% page_hx_vals %}}")
             if token:
-                errs += check(world, case, role, gate1, do_request(client, world, case, token), "parent-token")
+                errs += check(world, case, role, gate1, do_request(client, world, case, token, world.users[role]),
+                              "parent-token")
         errs += check(world, case, role, gate1, do_request(client, world, case), "no-token")
         errs += check(world, case, role, gate1, do_request(client, world, case, FORGED_TOKEN), "forged-token")
     assert not errs, "\n".join(errs)
@@ -451,3 +466,12 @@ def test_harness_detects_a_leak_in_a_registered_view(world):
     assert not any("out of order" in e for e in check(world, case, "ops_manager", False, Fake(), "self-test"))
     Fake.content = b"<table><tbody><tr><td>Operator D</td></tr><tr><td>Operator A</td></tr></tbody></table>"
     assert any("out of order" in e for e in check(world, case, "ops_manager", False, Fake(), "self-test"))
+
+    # D12: a stable alias pk in a URL, form field or element id lets "Operator B" today be tracked to
+    # "Operator D" tomorrow; refs from PageContext.ref() are the only allowed handle.
+    for leak in (b'<button hx-get="/area/1/shift/jobs/37/">', b'<input type="hidden" name="alias_id" value="37">',
+                 b'<div id="jobs-4-2-37"></div>'):
+        Fake.content = leak
+        assert any("stable operator/alias pk" in e for e in check(world, case, "ops_manager", False, Fake(), "self-test"))
+    Fake.content = b'<button hx-get="/area/1/shift/jobs/r0123456789abcdef0123/"><div id="jobs-4-2-r0123456789abcdef0123">'
+    assert not any("stable operator/alias pk" in e for e in check(world, case, "ops_manager", False, Fake(), "self-test"))

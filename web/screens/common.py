@@ -45,10 +45,11 @@ def announce(response, text, **events):
     return response
 
 
-def station_blocks(area, window):
-    """My Shift / print sheet body: [(Station, [OperatorGroup])] for the area's stations that ran in
+def station_blocks(area, window, hub):
+    """My Shift / print sheet body: [(Station, [OperatorGroup])] for the area's stations on `hub` (the
+    shift's hub: a shift belongs to one hub, so another hub's same-named shift never leaks in) that ran in
     the window, in line then sequence order. Grouped by station and part, never ranked across stations."""
-    stations = (Station.objects.filter(line__area=area).select_related("line__hub")
+    stations = (Station.objects.filter(line__area=area, line__hub=hub).select_related("line__hub")
                 .order_by("line__name", "sequence"))
     blocks = []
     for st in stations:

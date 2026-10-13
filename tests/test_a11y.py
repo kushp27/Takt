@@ -16,7 +16,7 @@ from django.conf import settings
 from accounts.policy import TOKEN_PARAM
 from disputes import service
 from disputes.models import Dispute
-from tests.screen_world import D, build, pin, t
+from tests.screen_world import D, build, pin, ref, t
 
 TOKEN_RE = re.compile(r'hx-vals="\{&quot;' + TOKEN_PARAM + r'&quot;: &quot;([^&]+)&quot;\}"')
 BASE = Path(settings.BASE_DIR)
@@ -48,7 +48,7 @@ def _pages(client, p):
     out["operators"] = client.get(f"/station/{p['s2'].pk}/operators/",
                                   {"date": "2026-09-15", TOKEN_PARAM: tok}, **hx).content.decode()
     tok = TOKEN_RE.search(out["my_shift"]).group(1)
-    out["jobs"] = client.get(f"/area/{a}/shift/jobs/{p['ops']['mid'].pk}/",
+    out["jobs"] = client.get(f"/area/{a}/shift/jobs/{ref(p['users']['builder'], out['my_shift'], p['ops']['mid'])}/",
                              {"shift_id": s, "date": "2026-09-15", TOKEN_PARAM: tok}, **hx).content.decode()
     d = Dispute.objects.get()
     tok = TOKEN_RE.search(out["queue"]).group(1)

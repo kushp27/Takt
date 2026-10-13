@@ -22,6 +22,15 @@ class SweepCase:
     method: str = "get"
     data: Callable = lambda w: {}                   # World -> POST body when method == "post"
     case_id: str | None = None
+    # Ref-addressed partials (D12: no pk in the HTML): (World, token payload) -> URL kwargs / POST fields that
+    # only the page token can build (PageContext.ref). Without a usable token the sweep sends a dummy ref:
+    # letter mode must answer HX-Refresh, named mode must refuse (403, nothing rendered).
+    token_kwargs: Callable | None = None
+    token_data: Callable | None = None
+
+    @property
+    def needs_token(self):
+        return self.token_kwargs is not None or self.token_data is not None
 
     @property
     def id(self):
@@ -31,6 +40,13 @@ class SweepCase:
         if self.expected is not None:
             return set(self.expected(world))
         return world.in_scope(area=self.area, shift=self.shift)
+
+
+def zeb_ref(w, payload):
+    """The opaque per-page reference to Zebulon on the page whose token payload is given."""
+    from accounts.policy import ref_for_key
+
+    return ref_for_key(payload["n"], f"o{w.ops['zeb'].operator.pk}")
 
 
 SWEEP_CASES = [
@@ -89,7 +105,8 @@ SWEEP_CASES = [
     ),
     SweepCase(
         "my_shift_jobs",
-        kwargs=lambda w: {"area_id": w.area_in.pk, "alias_id": w.ops["zeb"].alias.pk},
+        kwargs=lambda w: {"area_id": w.area_in.pk, "ref": "r0"},
+        token_kwargs=lambda w, payload: {"ref": zeb_ref(w, payload)},
         query=lambda w: {"shift_id": w.shift_1st.pk, "date": w.today.isoformat()},
         expected=lambda w: {"zeb"},
         shift="shift_1st",
@@ -100,9 +117,9 @@ SWEEP_CASES = [
         "my_shift_dispute",
         kwargs=lambda w: {"area_id": w.area_in.pk},
         method="post",
-        data=lambda w: {"shift_id": w.shift_1st.pk, "date": w.today.isoformat(),
-                        "alias_id": w.ops["zeb"].alias.pk,
+        data=lambda w: {"shift_id": w.shift_1st.pk, "date": w.today.isoformat(), "ref": "r0",
                         "job": [w.ops["zeb"].alias.jobs.order_by("pk").last().pk], "reason": "wrong_quantity"},
+        token_data=lambda w, payload: {"ref": zeb_ref(w, payload)},
         expected=lambda w: {"zeb"},
         shift="shift_1st",
         partial=True,

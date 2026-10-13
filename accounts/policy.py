@@ -60,6 +60,8 @@ HIDDEN = "hidden"
 TOKEN_PARAM = "takt_pt"
 TOKEN_SALT = "takt.accounts.page_token"
 LETTER_HMAC_SALT = "takt.accounts.gate1_letters"
+REF_HMAC_SALT = "takt.accounts.operator_ref"
+REF_LENGTH = 20
 # A token lives until local midnight after the day it was minted, plus this grace, so a
 # 3rd-shift page opened at 23:30 still works until the shift ends at 07:00.
 TOKEN_GRACE = timedelta(hours=8)
@@ -377,10 +379,38 @@ class PageContext:
             decorated = [(d, r) for d, r in decorated if d.visible]
         return [r for d, r in sorted(decorated, key=lambda dr: dr[0].sort_key)]
 
+    # ---- opaque per-page operator references (D12: nothing in the HTML may track a person across pages)
+
+    def ref(self, obj):
+        """An opaque reference to an operator (or unmapped alias) on this page, for URLs, form values and
+        element ids. HMAC of the page token's nonce and the operator key: it changes with every page load,
+        so it can't link "Operator B" today to "Operator D" tomorrow. None outside the page's scope."""
+        key = self.key_for(obj)
+        if key is None or key not in self.operator_keys:
+            return None
+        return ref_for_key(self.nonce, key)
+
+    def resolve(self, ref):
+        """The Operator (mapped) or OperatorAlias (unmapped) a ref names on this page, else None."""
+        if not ref or not isinstance(ref, str):
+            return None
+        for key in self.operator_keys:
+            if secrets.compare_digest(ref_for_key(self.nonce, key), ref):
+                pk = int(key[1:])
+                if key.startswith("o"):
+                    return Operator.objects.filter(pk=pk).first()
+                return OperatorAlias.objects.select_related("operator").filter(pk=pk).first()
+        return None
+
     @property
     def hx_vals(self):
         """JSON for an hx-vals attribute. Put it on a wrapper so every partial inherits it."""
         return json.dumps({TOKEN_PARAM: self.token})
+
+
+def ref_for_key(nonce, key):
+    """PageContext.ref() for a token nonce and an operator key ('o<pk>' / 'a<pk>'). Letters and digits only."""
+    return "r" + salted_hmac(REF_HMAC_SALT, f"{nonce}:{key}", algorithm="sha256").hexdigest()[:REF_LENGTH]
 
 
 _HIDDEN = OperatorDisplay(HIDDEN, HIDDEN_LABEL, (9, 0, ""))
