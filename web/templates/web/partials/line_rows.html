@@ -1,0 +1,30 @@
+{% load takt_ui takt_freshness %}{% comment %}
+Line Health rows (design review D3, D4, D22), shared by Line Health and Area. One <tbody> per line:
+each row leads with its status word (D3: "Each row leads with a status word"), then the line and the sentence
+(18px), then the 14px evidence row: pace and throughput merged
+("104% · +40 units", "— · no demand set") with the raw counts as a tooltip, yield with its top scrap code,
+the bottleneck with its coverage, and the 14-day sparkline. Stale hubs: the word "stale" plus muted values.
+The line name is a real button that drills down to stations (D18); "Loading stations…" shows under it (D13).
+{% endcomment %}<table class="line-health">
+  <caption class="visually-hidden">{{ caption_prefix|default:"Lines" }}, {{ window.label }}: status, pace against demand, yield, bottleneck and 14-day trend</caption>
+  <thead>
+    <tr><th scope="col">Status</th><th scope="col">Line</th><th scope="col">Pace · units</th><th scope="col">Yield (RTY)</th><th scope="col">Bottleneck</th><th scope="col" class="col-trend">14 days</th></tr>
+  </thead>
+  {% for row in rows %}{% with pk=row.line.pk pk_s=row.line.pk|stringformat:"s" %}
+  <tbody class="line-row {% stale_class row.line.hub %}" id="line-{{ pk }}">
+    <tr class="status-row">
+      <td class="status-lead" rowspan="2">{% if row.status %}<span class="status-word {{ row.status_key|status_class }}">{{ row.status }}</span>{% endif %}</td>
+      <th scope="rowgroup" rowspan="2"><span class="line-name-text">{{ row.line.name }}</span><button type="button" class="button-link drill-toggle line-name" data-takt-drill="stations" hx-get="{% url 'line_stations' pk %}?{{ window.query }}" hx-target="#drill-line-{{ pk }}" hx-indicator="#loading-line-{{ pk }}" aria-expanded="false" aria-controls="drill-line-{{ pk }}" data-load-error="Couldn't load stations." data-takt-loaded="Stations loaded">{{ row.line.name }}<span class="visually-hidden">: stations</span></button> {% stale_tag row.line.hub %}</th>
+      <td colspan="4" class="status-cell"><span class="sentence">{{ row.sentence }}</span></td>
+    </tr>
+    <tr class="evidence-row">
+      <td title="{{ row.pace.tooltip }}" data-label="Pace"><span class="evidence-label">Pace: </span>{{ row.pace.throughput_display }}</td>
+      <td data-label="Yield"><span class="evidence-label">Yield: </span>{{ row.yield_.display }}{% if row.top_scrap %} · top code {{ row.top_scrap.label }}{% endif %}</td>
+      <td data-label="Bottleneck"><span class="evidence-label">Bottleneck: </span>{% if row.bottleneck %}{{ row.bottleneck.station.name }} at {{ row.bottleneck.pace.display }} · {% endif %}{{ row.bottleneck_coverage_text }}</td>
+      <td class="col-trend">{% sparkline row %}</td>
+    </tr>
+    {% include "partials/states/loading.html" with noun="stations" colspan=6 indicator_id="loading-line-"|add:pk_s %}
+    <tr class="drill-row"><td colspan="6"><div class="drill" id="drill-line-{{ pk }}"></div></td></tr>
+  </tbody>
+  {% endwith %}{% endfor %}
+</table>

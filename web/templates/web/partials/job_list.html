@@ -1,0 +1,46 @@
+{% load operator takt_ui %}{% comment %}
+The operator's job list for the shift, inline under their row (design review D14). The lead ticks one or more
+jobs and picks a reason: wrong quantity, wrong operator, job not mine, time looks wrong, or other with text.
+Excluded jobs stay visible, struck through, with the reason, who confirmed it and when (D23). The form carries
+data-takt-form, so the live Refresh never swaps over it (eng re-review D5). Context: alias, items, reasons,
+area, shift, window, error, checked; person and ref (the opaque per-page
+reference from {% operator_ref %}, never a pk).
+{% endcomment %}{% with fid=ref %}
+<form class="dispute-form job-list" data-takt-form data-job-list method="post" hx-post="{% url 'my_shift_dispute' area.pk %}" hx-target="this" hx-swap="outerHTML" aria-labelledby="jl-h-{{ fid }}">
+  <input type="hidden" name="ref" value="{{ ref }}">
+  <input type="hidden" name="shift_id" value="{{ shift.pk }}">
+  <input type="hidden" name="date" value="{{ window.date_to.isoformat }}">
+  <h4 class="panel-heading" id="jl-h-{{ fid }}" tabindex="-1">Jobs for {% operator person %} · {{ window.label }}</h4>
+  {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+  <table class="data jobs">
+    <caption class="visually-hidden">Jobs in this shift. Tick the ones that look wrong.</caption>
+    <thead><tr><th scope="col"><span class="visually-hidden">Select</span></th><th scope="col">Job ID</th><th scope="col">Station and part</th><th scope="col">Started</th><th scope="col">Completed</th><th scope="col" class="num">Quantity</th><th scope="col">Status</th></tr></thead>
+    <tbody>
+    {% for item in items %}{% with job=item.job %}
+      <tr class="{% if item.excluded %}job-excluded{% endif %}">
+        <td>{% if item.disputable %}<input type="checkbox" name="job" value="{{ job.pk }}" id="job-{{ job.pk }}"{% if job.pk in checked %} checked{% endif %}>{% endif %}</td>
+        <th scope="row" class="mono job-cell">{% if item.disputable %}<label for="job-{{ job.pk }}">{{ job.mes_id }}</label>{% else %}{{ job.mes_id }}{% endif %}</th>
+        <td class="job-cell">{{ job.station.name }} · part {{ job.part.hub_part_code }}</td>
+        <td class="job-cell">{{ job.started_at|clock_time }}</td>
+        <td class="job-cell">{% if job.completed_at %}{{ job.completed_at|clock_time }}{% else %}—{% endif %}</td>
+        <td class="num job-cell">{{ job.quantity }}</td>
+        <td>{% if item.excluded %}Excluded: {{ item.exclusion_reason }}{% if item.excluded_by %}, confirmed by {{ item.excluded_by|user_short }}{% endif %}{% if item.excluded_at %}, {{ item.excluded_at|plant_time }}{% endif %}{% elif item.is_open %}Open, not counted yet{% elif item.open_dispute %}Disputed, waiting for the supervisor{% else %}Counted{% endif %}</td>
+      </tr>
+    {% endwith %}{% empty %}
+      <tr><td colspan="7">No jobs in this shift.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if any_disputable %}
+  <fieldset>
+    <legend>What looks wrong?</legend>
+    {% for value, label in reasons %}<div class="choice"><input type="radio" name="reason" value="{{ value }}" id="reason-{{ fid }}-{{ value }}"{% if value == posted_reason %} checked{% endif %} required><label for="reason-{{ fid }}-{{ value }}">{{ label }}</label></div>{% endfor %}
+    <p><label for="reason-text-{{ fid }}">If other, what looks wrong?</label><br><input type="text" name="reason_text" id="reason-text-{{ fid }}" maxlength="500" value="{{ posted_text }}" aria-describedby="reason-hint-{{ fid }}"><br><span class="subtle" id="reason-hint-{{ fid }}">Don't name operators.</span></p>
+  </fieldset>
+  {% endif %}
+  <div class="actions">
+    {% if any_disputable %}<button type="submit">Submit dispute</button>{% endif %}
+    <button type="button" class="button-link" data-takt-cancel>{% if any_disputable %}Cancel{% else %}Close{% endif %}</button>
+  </div>
+</form>
+{% endwith %}

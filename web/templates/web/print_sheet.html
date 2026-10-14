@@ -1,0 +1,47 @@
+{% extends "web/base.html" %}{% load operator takt_ui takt_freshness %}
+{% comment %}
+The printed shift sheet (design D20): the sticky-note replacement. US Letter portrait, black and white
+(print.css hides the nav). Header: line, shift, date, then ONLY {% print_header hub %} for "Data as of",
+"Printed", "STALE: data stopped at" and "late-closing jobs may change totals" (eng re-review D6).
+One section per station-part, page breaks only between stations. Columns: operator, jobs, quantity and a
+blank Correction column. Trust as the D16 words. Exactly the operator counts matrix 4a allows (on_print_sheet);
+no rates, medians, comparisons or "worth a conversation". Letters per page token before Gate 1 (D12).
+Footer: "For lead use. Not for posting." and page X of Y (print.css @page).
+{% endcomment %}
+{% block title %}Shift sheet · {{ area.name }}{% endblock %}
+{% block content %}
+<article class="print-sheet" {% page_hx_vals %}>
+  <p class="print-actions no-print"><button type="button" onclick="window.print()">Print</button> <a href="{{ back_url }}">Back to My Shift</a></p>
+  <header class="print-head">
+    <h1>Shift sheet · {{ area.name }}</h1>
+    <p class="print-window">{% for ln in lines %}{{ ln.name }}{% if not forloop.last %}, {% endif %}{% endfor %} · {{ shift.name }} shift · {{ window.date_to|date:"l, F j, Y" }}</p>
+    {% print_header hub %}
+  </header>
+  {% gate1_notice %}
+  {% for b in blocks %}
+  <section class="print-station">
+    <h2>{{ b.station.name }}</h2>
+    {% for group in b.groups %}
+      {% if group.cell.on_print_sheet %}
+      <table class="data print-group">
+        <caption>{{ b.station.name }} · part {{ group.part.hub_part_code }} · {{ group.cell.badge.text }}</caption>
+        <thead><tr><th scope="col">Operator</th><th scope="col" class="num">Jobs</th><th scope="col" class="num">Quantity</th><th scope="col" class="correction">Correction</th></tr></thead>
+        <tbody>
+        {% operators_sorted group.rows "alias" as rows %}{% for r in rows %}
+          <tr><th scope="row">{% operator r.alias %}</th><td class="num">{{ r.jobs }}</td><td class="num">{{ r.quantity }}</td><td class="correction"></td></tr>
+        {% endfor %}
+        </tbody>
+        <tfoot><tr><th scope="row">Part total</th><td class="num">{{ group.jobs }}</td><td class="num">{{ group.quantity }}</td><td class="correction"></td></tr></tfoot>
+      </table>
+      {% else %}
+      <p class="print-group print-unverified"><strong>{{ b.station.name }} · part {{ group.part.hub_part_code }} · {{ group.cell.badge.text }}</strong><br>{{ group.message }}</p>
+      {% endif %}
+    {% endfor %}
+    {% if b.totals %}<p class="print-total"><strong>Station total:</strong> {{ b.totals.0 }} job{{ b.totals.0|pluralize }} · {{ b.totals.1 }} units</p>{% endif %}
+  </section>
+  {% empty %}
+  <p>No jobs in this shift.</p>
+  {% endfor %}
+  <footer class="print-foot">For lead use. Not for posting.</footer>
+</article>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% load operator takt_ui %}{% comment %}
+"My disputes" strip (design review D14, eng re-review D4): each of the user's disputes in this area and shift as
+Open / Confirmed / Rejected with the supervisor's note, grouped by submission (one <tbody> each). Kept on the page
+(hidden) when empty so a new submission can swap it in out of band. Context: my_disputes, oob.
+{% endcomment %}<section id="my-disputes" class="strip my-disputes" aria-labelledby="my-disputes-h"{% if oob %} hx-swap-oob="outerHTML"{% endif %}{% if not my_disputes %} hidden{% endif %}>
+  <h2 id="my-disputes-h">My disputes</h2>
+  {% if my_disputes %}
+  <table class="data">
+    <caption class="visually-hidden">Disputes you raised, newest first, with the supervisor's decision and note</caption>
+    <thead><tr><th scope="col">Job</th><th scope="col">Station and part</th><th scope="col">Operator</th><th scope="col">Reason</th><th scope="col">Status</th><th scope="col">Supervisor's note</th></tr></thead>
+    {% for sub in my_disputes %}
+    <tbody>{% operators_sorted sub "job.alias" as rows %}{% for d in rows %}
+      <tr>
+        <th scope="row" class="mono" data-label="Job">{{ d.job.mes_id }}</th>
+        <td data-label="Station and part">{{ d.job.station.name }} · part {{ d.job.part.hub_part_code }}</td>
+        <td data-label="Operator">{% operator d.job.alias %}</td>
+        <td data-label="Reason">{{ d.get_reason_display }}{% if d.reason_text %}: {{ d.reason_text }}{% endif %}</td>
+        <td data-label="Status"><span class="status-{{ d.status }}">{{ d.get_status_display }}</span></td>
+        <td data-label="Supervisor's note">{% if d.note %}{{ d.note }}{% if d.decided_by %} ({{ d.decided_by|user_short }}){% endif %}{% else %}—{% endif %}</td>
+      </tr>{% endfor %}
+    </tbody>
+    {% endfor %}
+  </table>
+  {% endif %}
+</section>

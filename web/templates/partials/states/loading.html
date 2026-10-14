@@ -1,0 +1,3 @@
+{% comment %}Table 6a, D13: drill-down loading (htmx). An inline "Loading stations…" sub-row under the clicked row;
+the old content stays, there is no full-page spinner. Used as the hx-indicator. Context: noun ("stations"),
+indicator_id, colspan (inside a table: a <tr>; otherwise a <p>).{% endcomment %}{% if colspan %}<tr class="loading-row htmx-indicator" id="{{ indicator_id }}"><td colspan="{{ colspan }}">Loading {{ noun|default:"stations" }}…</td></tr>{% else %}<p class="loading-row htmx-indicator" id="{{ indicator_id }}">Loading {{ noun|default:"stations" }}…</p>{% endif %}

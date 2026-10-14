@@ -1,82 +1,137 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Takt wireframe</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Takt wireframe</title>
+<!-- Redrawn per the design review Pass 7 corrections (D-T11). Grayscale on purpose: colour appears only as the
+     words "Behind" / "Yield problem" / "Overdue" would carry it on screen. Matches matrix 4a and the views spec:
+     - line rows show no cycle time; line pace is count-only; pace and throughput are one column (D4);
+     - the bottleneck sentence appears only when a line is Behind, with coverage text;
+     - kiln (batch) operator counts follow the Red column of matrix 4a; Leach 2 (not count-trusted) shows no rows;
+     - operator detail is visible to the lead, the area supervisor and Brian; before Gate 1 they see letters. -->
 <style>
-  body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#222;background:#fff;margin:24px;font-size:13px}
-  .screen{border:1.5px dashed #888;border-radius:6px;padding:16px;margin-bottom:28px}
-  .label{font-size:11px;color:#777;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
-  .bar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #bbb;padding-bottom:8px;margin-bottom:12px}
-  .logo{display:flex;gap:8px;align-items:center;font-weight:700;font-size:16px}
-  .icon{width:28px;height:22px;border:1.5px solid #555;border-radius:6px 10px 4px 4px;font-size:9px;display:flex;align-items:center;justify-content:center}
+  body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#222;background:#fff;margin:24px;font-size:13px;max-width:1180px}
+  .screen{border:1.5px dashed #888;padding:16px;margin-bottom:28px}
+  .label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+  .bar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #bbb;padding-bottom:8px;margin-bottom:12px;gap:12px;flex-wrap:wrap}
+  .nav b{margin-right:12px}.nav span{margin-right:12px;text-decoration:underline}
   .fresh{font-size:12px;color:#555}
-  .row{display:grid;grid-template-columns:150px 1fr 1fr 1fr 150px 110px;gap:8px;align-items:center;border:1px solid #ccc;border-radius:4px;padding:10px;margin-bottom:8px}
-  .head{border:none;font-size:11px;color:#777;padding:0 10px}
-  .big{font-size:18px;font-weight:700}
-  .sub{font-size:11px;color:#666}
-  .spark{height:18px;border-bottom:1px solid #999;background:repeating-linear-gradient(90deg,#fff 0 6px,#eee 6px 12px)}
-  .story{font-size:12px;border-left:3px solid #888;padding-left:8px;margin:4px 0 0}
-  table{border-collapse:collapse;width:100%;margin-top:6px}
-  th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
-  th{font-size:11px;color:#666;font-weight:600;background:#f6f6f6}
-  .grade{display:inline-block;border:1px solid #666;border-radius:3px;padding:1px 6px;font-size:11px}
-  .muted{color:#999}
-  .group{font-weight:700;background:#fafafa}
-  .note{font-size:11px;color:#777;margin-top:8px}
+  h2{font-size:18px;margin:4px 0 8px}h3{font-size:14px;margin:14px 0 6px}
+  table{border-collapse:collapse;width:100%;margin:6px 0 10px}
+  th,td{border-bottom:1px solid #ccc;padding:5px 8px;text-align:left;vertical-align:top}
+  th{font-size:11px;color:#555;font-weight:600}
+  .status{font-size:16px;font-weight:700}.sentence{font-size:16px}
+  .ev td{font-size:12px}
+  .badge{display:inline-block;border:1px solid #555;border-radius:3px;padding:0 5px;font-size:11px}
+  .muted{color:#888}.note{font-size:11px;color:#666;margin-top:6px}
+  .spark{display:inline-block;width:110px;height:18px;border-bottom:1px solid #999;background:linear-gradient(#eee,#eee) 0 6px/100% 6px no-repeat}
+  .strip{border-top:1px solid #bbb;border-bottom:1px solid #bbb;padding:6px 0;margin:8px 0}
+  .btn{border:1px solid #555;border-radius:3px;padding:1px 6px;font-size:12px}
+  .gate{font-weight:700;font-size:12px}
+  .strike{text-decoration:line-through}
 </style></head><body>
 
-<!-- SCREEN 1: Brian's line health. Design decision: the three metrics sit side by side on one row per line,
-     because the story is in how they interact (on pace + low yield), not in any one number. -->
 <div class="screen">
-  <div class="label">Screen 1 · Line Health (Brian, ops manager) · daily glance</div>
-  <div class="bar">
-    <div class="logo"><div class="icon">tuk</div>Takt</div>
-    <!-- Freshness is always visible: a stalled MES feed must never look current. -->
-    <div class="fresh">Cores Hub data as of 6:42 AM · Dies Hub as of 6:40 AM · Yesterday, 2nd + 3rd shift ▾</div>
-  </div>
-  <div class="row head"><div>Line</div><div>Pace vs takt</div><div>Throughput vs demand</div><div>Yield (found at sort)</div><div>Bottleneck</div><div>14 days</div></div>
-
-  <div class="row">
-    <div><b>Cores Line 1</b><div class="sub">takt 92 s</div></div>
-    <div><span class="big">104%</span><div class="sub">avg cycle 88 s</div></div>
-    <div><span class="big">1,840 / 1,800</span><div class="sub">+40 units</div></div>
-    <div><span class="big">71%</span><div class="sub">top code: voids (38%)</div></div>
-    <div>Injection 3<div class="sub">grade: green</div></div>
-    <div class="spark"></div>
-  </div>
-  <!-- The auto-generated one-line story is the "health check" Brian asked for. -->
-  <div class="story">On pace, but yield is 14 pts under its 14-day average, mostly voids. Look upstream at injection, not at pace.</div>
-  <br>
-  <div class="row">
-    <div><b>Cores Line 2</b><div class="sub">takt 92 s</div></div>
-    <div><span class="big">86%</span><div class="sub">avg cycle 107 s</div></div>
-    <div><span class="big">1,510 / 1,800</span><div class="sub">−290 units</div></div>
-    <div><span class="big">93%</span><div class="sub">top code: UVC (3%)</div></div>
-    <div>Leach 2<div class="sub">grade: amber · counts only</div></div>
-    <div class="spark"></div>
-  </div>
-  <div class="story">Behind takt with good yield. Leach 2 had 2.4 h with no transactions on 3rd shift (starved or down?).</div>
-  <div class="note">Click a line → stations (pace, throughput, yield, trust grade) → operators at that station, same part only.</div>
+  <div class="label">Screen 1 · Line Health (Brian, ops manager) · opens on the last completed production day (D21)</div>
+  <div class="bar"><div class="nav"><b>Takt</b><span>Line Health</span><span>Area</span><span>My Shift</span><span>Disputes [2]</span></div>
+    <div class="fresh">Cores Hub data as of 6:42 AM · Dies Hub as of 6:40 AM</div></div>
+  <h2>Line Health <span class="muted" style="font-size:13px;font-weight:400">Mon Oct 12, all shifts</span></h2>
+  <div class="note">Picker: Date [2026-10-12] · Shift [All shifts ▾] · Days [1 day ▾] · Show</div>
+  <table>
+    <tr><th>Status</th><th>Line</th><th>Pace · units</th><th>Yield (RTY)</th><th>Bottleneck</th><th>14 days</th></tr>
+    <tr><td rowspan="2"><span class="status">On pace</span></td><th rowspan="2"><u>Cores Line 1</u></th><td colspan="4"><span class="sentence">On pace, yield 14.0 pts under baseline, mostly Voids. Look upstream at Injection 3, not at pace.</span></td></tr>
+    <tr class="ev"><td>104% · +40 units</td><td>71.0% · top code Voids</td><td>Sort at 98% · bottleneck chosen from 6 of 7 stations</td><td><span class="spark"></span></td></tr>
+    <tr><td rowspan="2"><span class="status">Behind</span></td><th rowspan="2"><u>Dies Line 1</u></th><td colspan="4"><span class="sentence">Pace 9.0 pts under its 14-day baseline, yield in its usual range. Bottleneck: Press 1 at 86% (chosen from 3 of 4 stations).</span></td></tr>
+    <tr class="ev"><td>86% · −290 units</td><td>93.0% · top code UVC</td><td>Press 1 at 86% · bottleneck chosen from 3 of 4 stations</td><td><span class="spark"></span></td></tr>
+  </table>
+  <div class="note">Status words: On pace / Behind / Yield problem / No demand set / Pace unavailable (final-station counts unverified: "— · unavailable: final-station counts unverified"). Zero demand reads "— · no demand set", never 0% or ∞. No cycle time on line rows. The bottleneck sentence is appended only when Behind. Sparkline: pace (ink) and yield (grey) with ±1 SD bands, today marked; its accessible name is "Pace 14-day trend: 98% to 104%; yield 82% to 71%".</div>
+  <h3>▾ Cores Line 1: stations (click the line name) · Loading stations… shows under the row</h3>
+  <table>
+    <tr><th>Station</th><th>Trust</th><th>Pace · units</th><th>Good / required</th><th>Yield</th><th>Top scrap</th></tr>
+    <tr><th>Injection 3</th><td><span class="badge">Verified ✓</span></td><td>101% · +4 units</td><td>604 good of 600 required</td><td>96.8%</td><td>Short shot (20)</td></tr>
+    <tr><td style="padding-left:20px">Part C-4471</td><td><span class="badge">Verified ✓</span></td><td colspan="2">32 jobs · 604 units</td><td>96.8%</td><td><span class="btn">Operators</span></td></tr>
+    <tr><th>Leach 2</th><td><span class="badge">Counts unverified ?</span></td><td>— · Counts unverified</td><td>—</td><td>94.1%</td><td>—</td></tr>
+    <tr><td style="padding-left:20px">Part C-4471</td><td><span class="badge">Counts unverified ?</span></td><td colspan="2">Counts unverified, keep tally.</td><td>94.1%</td><td></td></tr>
+    <tr><th>Fire (kiln)</th><td><span class="badge">Excluded –</span></td><td>99% · −3 units</td><td>297 good of 300 required</td><td>97.0%</td><td>—</td></tr>
+    <tr><td colspan="6" class="muted">Batch station: 3.0 batches per shift · 100 units per batch · batch cycle 6.5 h</td></tr>
+    <tr><th>Sort · <b>Bottleneck</b></th><td><span class="badge">Verified ✓</span></td><td>98% · −12 units</td><td>588 good of 600 required</td><td>91.2%</td><td>Voids (38)</td></tr>
+  </table>
+  <div class="note">Operators drill-down: same station and part only, rows A-Z, never ranked (see Screen 3 for the columns).</div>
 </div>
 
-<!-- SCREEN 2: Lead shift view. Replaces the sticky note. Grouped by station + part, never sorted plant-wide. -->
 <div class="screen">
-  <div class="label">Screen 2 · My Shift (lead) · replaces the sticky note</div>
-  <div class="bar">
-    <div class="logo"><div class="icon">tuk</div>Takt · Cores Line 2 · 2nd shift · Tue Oct 13</div>
-    <div class="fresh">Updated 11:15 PM · <u>print sheet</u></div>
-  </div>
+  <div class="label">Screen 2 · Area (supervisor) · opens on the last completed shift; current shift one click away (D21)</div>
+  <div class="bar"><div class="nav"><b>Takt</b><span>Line Health</span><span>Area</span><span>My Shift</span><span>Disputes [3]</span></div><div class="fresh">Cores Hub data as of 3:02 PM</div></div>
+  <h2>Cores Area <span class="btn">3 open disputes · 1 overdue</span> <span class="muted" style="font-size:13px;font-weight:400">1st shift, Tue Oct 13</span></h2>
+  <div class="note">Picker: Date · Shift [1st ▾] · Show · <u>Current shift</u></div>
+  <div class="strip"><b>Open disputes</b><br>3 open · <b>Overdue: 1</b> · oldest 3 shifts old · <u>Review</u></div>
+  <h3>Lines</h3>
+  <div class="note">(Line Health rows for the area's lines, as Screen 1, for the chosen shift.)</div>
+  <h3>Shift comparison</h3>
+  <table><tr><th>Line</th><th>1st shift pace</th><th>1st shift yield</th><th>2nd shift pace</th><th>2nd shift yield</th><th>3rd shift pace</th><th>3rd shift yield</th></tr>
+    <tr><th>Cores Line 1</th><td>104% · +14 units</td><td>71.0%</td><td>97% · −9 units</td><td>88.3%</td><td>— · shift not started</td><td>—</td></tr></table>
+  <h3>Dispute queue (Disputes [3]) · oldest first, overdue on top</h3>
+  <table><tr><th>Age</th><th>Station and part</th><th>Job ID and time</th><th>Operator</th><th>Raised by</th><th>Reason</th><th></th></tr>
+    <tr><td><b>Overdue</b> · 3 shifts</td><td>Sort · part C-4471</td><td>J-88213 · Mon 9:40 AM</td><td>Operator B</td><td>K. Lee</td><td>Wrong quantity</td><td><span class="btn">Review</span></td></tr>
+    <tr><td colspan="7">▾ MES values: hub, station, part, operator, started, completed, quantity 30, shift · Note to the lead (required) [______] · ☑ The count itself is wrong: also remove from counts · ☐ Apply to all 2 open jobs in this submission · <span class="btn">Confirm</span> <span class="btn">Reject</span> Cancel</td></tr>
+    <tr><td>1 shift</td><td>Press 1 · part D-2210</td><td>J-88540 · Tue 8:12 AM</td><td>Operator A</td><td>K. Lee</td><td>Job not mine</td><td><span class="btn">Review</span></td></tr></table>
+  <div class="note">Rows grouped by submission; each job decided separately. Both Confirm and Reject need a note, shown to the lead. In-app only, no email.</div>
+</div>
 
-  <table>
-    <tr><th>Operator</th><th>Jobs</th><th>Qty</th><th>Units / hr</th><th>vs station + part median</th><th>Hours with no transaction</th><th>Context</th></tr>
-    <tr class="group"><td colspan="7">Injection 3 · part C-4471 · <span class="grade">green: durations OK</span> · median 41 u/hr</td></tr>
-    <tr><td>#1042 Maria</td><td>38</td><td>342</td><td>43</td><td>+5%</td><td>0.3</td><td class="muted">—</td></tr>
-    <tr><td>#1187 Dev</td><td>31</td><td>279</td><td>35</td><td>−15%</td><td>1.1</td><td>2 mold changes on shift</td></tr>
-    <tr><td>#1203 Sam (hired 6 wks ago)</td><td>29</td><td>261</td><td>33</td><td>−20%</td><td>0.4</td><td>tenure &lt; 90 days</td></tr>
-    <!-- Amber = counts are trusted, durations are not: rate columns are blanked, not guessed. -->
-    <tr class="group"><td colspan="7">Leach 2 · part C-4471 · <span class="grade">amber: counts only</span> (64% of completes in last 30 min of shift)</td></tr>
-    <tr><td>#1099 Lena</td><td>12</td><td>480</td><td class="muted">n/a</td><td class="muted">n/a</td><td>2.4</td><td>starved? Injection 3 output gap 7–9 PM</td></tr>
-    <tr class="group"><td colspan="7">Fire (kiln, batch) · <span class="grade">red: excluded from operator metrics</span></td></tr>
-    <tr><td colspan="7" class="muted">Batch process: counts shown at station level only.</td></tr>
-  </table>
-  <div class="note">No cross-station ranking. Operator detail is visible only to this lead and Brian. Each row has "this number looks wrong" (dispute) → flags the transaction for review.</div>
+<div class="screen">
+  <div class="label">Screen 3 · My Shift (lead) · replaces the sticky note · opens on the current shift, live (D21)</div>
+  <div class="bar"><div class="nav"><b>Takt</b><span>Line Health</span><span>Area</span><span>My Shift</span></div><div class="fresh">Cores Hub data as of 2:38 PM</div></div>
+  <h2>My Shift · Cores Area <span class="muted" style="font-size:13px;font-weight:400">1st shift, Tue Oct 13 (live) · <u>Print sheet</u></span></h2>
+  <div class="note" role="status">New data from 2:45 PM · <span class="btn">Refresh</span> (polls every 5 min; swaps only on click, never over an open dispute form)</div>
+  <p class="gate">Names hidden until HR approves operator-level views (Gate 1).</p>
+  <div class="strip"><b>My disputes</b>
+    <table><tr><th>Job</th><th>Station and part</th><th>Operator</th><th>Reason</th><th>Status</th><th>Supervisor's note</th></tr>
+      <tr><td>J-88213</td><td>Sort · part C-4471</td><td>Operator C</td><td>Wrong quantity</td><td>Confirmed</td><td>Traveler says 30. (J. Ortiz)</td></tr>
+      <tr><td>J-88214</td><td>Sort · part C-4471</td><td>Operator C</td><td>Wrong quantity</td><td>Rejected</td><td>Bin count matches. (J. Ortiz)</td></tr></table></div>
+  <h3>Worth a conversation</h3>
+  <div class="muted">Injection 3 · part C-4471</div>
+  <ul><li>Operator B · Injection 3 · −20% vs median · tenure &lt; 90 days</li></ul>
+  <div class="note">Up to 3 names per green station-part group, listed A-Z; never plant-wide, never on the print sheet.</div>
+
+  <h3>Injection 3</h3>
+  <table><tr><th colspan="8">Injection 3 · part C-4471 <span class="badge">Verified ✓</span> · median 41 u/hr · takt rate 40 u/hr</th></tr>
+    <tr><th>Operator</th><th>Jobs</th><th>Quantity</th><th>Rate vs median</th><th>Time with no transaction</th><th>Upstream output gap</th><th>Tenure</th><th></th></tr>
+    <tr><td>Operator A</td><td>38</td><td>342</td><td>+5% vs median</td><td>18 min</td><td>—</td><td></td><td><span class="btn">This looks wrong</span></td></tr>
+    <tr><td>Operator B</td><td>29 · <u>1 job excluded</u></td><td>261</td><td>−20% vs median</td><td>24 min</td><td>—</td><td>tenure &lt; 90 days</td><td><span class="btn">This looks wrong</span></td></tr>
+    <tr><td colspan="8">▾ Jobs for Operator B: ☐ J-88401 7:12 AM qty 9 · <span class="strike">J-88402 7:40 AM qty 9</span> Excluded: wrong quantity, confirmed by J. Ortiz, Tue 3:10 PM · What looks wrong? ○ Wrong quantity ○ Wrong operator ○ Job not mine ○ Time looks wrong ○ Other [____] · <span class="btn">Submit dispute</span> Cancel</td></tr>
+    <tr><td>Operator D</td><td>31</td><td>279</td><td>−15% vs median</td><td>1.1 h</td><td>—</td><td></td><td><span class="btn">This looks wrong</span></td></tr></table>
+
+  <h3>Deburr 1</h3>
+  <table><tr><th colspan="7">Deburr 1 · part C-4471 <span class="badge">Counts only #</span></th></tr>
+    <tr><th>Operator</th><th>Jobs</th><th>Quantity</th><th>Rate vs median</th><th>Upstream output gap</th><th>Tenure</th><th></th></tr>
+    <tr><td>Operator E</td><td>12</td><td>480</td><td>n/a</td><td>2.4 h</td><td></td><td><span class="btn">This looks wrong</span></td></tr></table>
+  <div class="note">Amber / Not graded yet ("Not graded yet (needs 4 weeks; 9 days so far)"): counts, rate "n/a", no time with no transaction.</div>
+
+  <h3>Fire (kiln)</h3>
+  <table><tr><th colspan="6">Fire (kiln) · part C-4471 <span class="badge">Excluded –</span></th></tr>
+    <tr><th>Operator</th><th>Jobs</th><th>Quantity</th><th>Upstream output gap</th><th>Tenure</th><th></th></tr>
+    <tr><td>Operator F</td><td>3</td><td>300</td><td>—</td><td></td><td><span class="btn">This looks wrong</span></td></tr></table>
+  <div class="note">Red / batch (matrix 4a): operator counts only: no rates, comparisons or time with no transaction.</div>
+
+  <h3>Leach 2</h3>
+  <p><b>Leach 2 · part C-4471</b> <span class="badge">Counts unverified ?</span><br><b>Counts unverified, keep tally.</b></p>
+  <div class="note">Not count-trusted: no operator rows at all. States: "1st shift started 7:00 AM. First jobs usually close within 20 minutes." (Last shift's sheet) · "No shift scheduled today" (Last shift · 14-day view). Phone (&lt;640px): stacked blocks, no sparkline or dispute controls, "Open on a desktop to dispute or drill down."</div>
+</div>
+
+<div class="screen">
+  <div class="label">Screen 4 · Print sheet (lead) · US Letter portrait, black and white (D20)</div>
+  <h2>Shift sheet · Cores Area</h2>
+  <div>Cores Line 1 · 1st shift · Tuesday, October 13, 2026</div>
+  <div><b>STALE: data stopped at 6:40 AM</b> (only when the hub is stale)</div>
+  <div>Data as of 2:38 PM · Printed 2:41 PM · late-closing jobs may change totals</div>
+  <p class="gate">Names hidden until HR approves operator-level views (Gate 1).</p>
+  <h3>Injection 3</h3>
+  <table><tr><th colspan="4">Injection 3 · part C-4471 · Verified ✓</th></tr>
+    <tr><th>Operator</th><th>Jobs</th><th>Quantity</th><th style="width:30%">Correction</th></tr>
+    <tr><td>Operator A</td><td>38</td><td>342</td><td></td></tr><tr><td>Operator B</td><td>29</td><td>261</td><td></td></tr>
+    <tr><th>Part total</th><th>67</th><th>603</th><td></td></tr></table>
+  <div><b>Station total:</b> 67 jobs · 603 units</div>
+  <h3>Leach 2</h3>
+  <p><b>Leach 2 · part C-4471 · Counts unverified ?</b><br>Counts unverified, keep tally.</p>
+  <div class="note">No rates, medians, comparisons or "worth a conversation". Page breaks only between stations. Letters are reassigned on every print.</div>
+  <div>For lead use. Not for posting. · Page 1 of 2</div>
 </div>
 </body></html>

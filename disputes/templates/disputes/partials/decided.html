@@ -1,0 +1,9 @@
+{% comment %}After Confirm / Reject, only the decided rows change: other rows of the submission, and any decide
+form open on them, are never touched (eng re-review D5). The response replaces the decided row's expand row
+(the hx-target, closing its form) and swaps each decided queue row out of band; with "apply to all", each
+other decided row and its expand row are swapped out of band too. Focus moves to the first decided row
+(data-takt-focus-here); takt.js announces the decision and updates the nav badge (HX-Trigger).
+Context: primary (the QueueItem whose form was submitted), others ([QueueItem]), area.
+{% endcomment %}<tr class="detail-row" id="dispute-{{ primary.dispute.pk }}-detail-row"><td colspan="7"><div class="drill" id="dispute-{{ primary.dispute.pk }}-detail"></div></td></tr>
+{% with item=primary %}{% include "disputes/partials/dispute_row.html" with oob=True focus=True only_main=True %}{% endwith %}
+{% for item in others %}{% include "disputes/partials/dispute_row.html" with oob=True focus=False %}{% endfor %}

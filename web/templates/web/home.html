@@ -1,2 +1,3 @@
 {% extends "web/base.html" %}
-{% block content %}<h1>Takt</h1><p>Scaffold is running.</p>{% endblock %}
+{% comment %}Shown only when `/` has nowhere to send the user (no role, or no area / shift assigned yet).{% endcomment %}
+{% block content %}<h1>Takt</h1><p>{{ message|default:"Nothing to show yet." }}</p>{% endblock %}

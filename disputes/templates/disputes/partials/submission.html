@@ -1,0 +1,9 @@
+{% load operator %}{% comment %}
+One submission in the queue: a <tbody> of its per-job rows (eng re-review D4), in operator display order.
+Open rows expand inline to the MES values (Review); decided rows show the decision and the note the lead sees.
+Context: sub (disputes.service.QueueSubmission), area.
+{% endcomment %}<tbody class="submission{% if sub.overdue %} is-overdue{% endif %}" id="submission-{{ sub.submission_id }}">
+{% operators_sorted sub.items "dispute.job.alias" as items %}{% for item in items %}
+  {% include "disputes/partials/dispute_row.html" with oob=False focus=False %}
+{% endfor %}
+</tbody>

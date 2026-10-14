@@ -73,6 +73,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "ops.context_processors.freshness",  # lazy per-hub freshness (Component 9, D9)
+                "web.context_processors.nav",  # top nav + open-dispute badge (eng review D6)
             ],
         },
     },

@@ -1,0 +1,28 @@
+{% load operator takt_ui %}{% comment %}
+#shift-table: the region the live notice's Refresh replaces (eng re-review D5). Its heading takes focus after a
+Refresh. Holds "worth a conversation" (D5: up to 3 names per green station-part group, each with its context
+reasons; listed A-Z, never ranked) and the table grouped by station and part (one <table>/<tbody> per group, A-Z
+rows, D6). Never plant-wide. Context: blocks, conversation, start, area, window.
+{% endcomment %}{# The API picks up to 3 names per group by shortfall; the list shows them A-Z by the displayed label: storyboard 6b step 2, "D5 list, D6 neutral order". #}<section id="shift-table" class="shift-table" aria-labelledby="shift-table-h">
+  <h2 id="shift-table-h" class="section-title" tabindex="-1">Shift numbers · {{ window.label }}</h2>
+  {% if start %}{% include "partials/states/start_of_shift.html" with shift_name=start.shift_name started=start.started last_sheet_url=start.last_sheet_url %}{% endif %}
+  {% if conversation %}
+  <section class="conversation" aria-labelledby="conversation-h">
+    <h3 id="conversation-h">Worth a conversation</h3>
+    {% for cg in conversation %}
+    <p class="subtle">{{ cg.station.name }} · part {{ cg.part.hub_part_code }}</p>
+    <ul>{% operators_sorted cg.items "row.alias" as items %}{% for it in items %}
+      <li>{% operator it.row.alias %} · {{ it.station.name }}{% for r in it.reasons %} · {{ r.text }}{% endfor %}</li>{% endfor %}
+    </ul>
+    {% endfor %}
+  </section>
+  {% endif %}
+  {% for station, groups in blocks %}
+  <section class="station-block" aria-labelledby="station-h-{{ station.pk }}">
+    <h3 id="station-h-{{ station.pk }}">{{ station.name }}</h3>
+    {% for group in groups %}{% include "web/partials/operator_group.html" with with_disputes=True %}{% endfor %}
+  </section>
+  {% empty %}
+  {% if not start and not no_shift %}<p>No jobs in this shift yet.</p>{% endif %}
+  {% endfor %}
+</section>

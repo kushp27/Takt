@@ -70,7 +70,7 @@ def print_header(context, hub):
     return {"header": header}
 
 
-def _poller_context(context, hub, refresh_url, refresh_target):
+def _poller_context(context, hub, refresh_url, refresh_target, page_url=""):
     f = _resolve(context, hub)
     if f is None:
         return {"poll_url": None}
@@ -79,15 +79,18 @@ def _poller_context(context, hub, refresh_url, refresh_target):
         params["refresh_url"] = refresh_url
     if refresh_target:
         params["refresh_target"] = refresh_target
+    if page_url:
+        params["page_url"] = page_url
     return {"poll_url": f"{reverse('freshness_notice')}?{urlencode(params)}", "hub_code": f.code}
 
 
 @register.inclusion_tag("ops/partials/freshness_notice.html", takes_context=True)
-def freshness_notice(context, hub, refresh_url="", refresh_target=""):
-    return _poller_context(context, hub, refresh_url, refresh_target)
+def freshness_notice(context, hub, refresh_url="", refresh_target="", page_url=""):
+    """page_url: where the Refresh link goes without script (the full page); default refresh_url."""
+    return _poller_context(context, hub, refresh_url, refresh_target, page_url)
 
 
 @register.inclusion_tag("ops/partials/freshness_notice_reset.html", takes_context=True)
-def freshness_notice_reset(context, hub, refresh_url="", refresh_target=""):
+def freshness_notice_reset(context, hub, refresh_url="", refresh_target="", page_url=""):
     """Include in the fragment Refresh swaps in: an hx-swap-oob poller with the new `since`."""
-    return _poller_context(context, hub, refresh_url, refresh_target)
+    return _poller_context(context, hub, refresh_url, refresh_target, page_url)

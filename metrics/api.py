@@ -36,6 +36,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+from django.db.models import Q
 from django.utils import timezone as djtz
 
 from core.models import (Job, Line, OperatorAlias, Part, PartFamily, Routing, ScrapCode, SiteSettings, Station,
@@ -724,21 +725,35 @@ def _upstream_gap_seconds(segs, completions, threshold_s):
     return sum(g for g in (b - a for a, b in zip(pts, pts[1:])) if g >= threshold_s)
 
 
-def _upstream_station(station, family_id):
-    """The previous station on the part family's Routing (highest sequence below this one), or None."""
-    return (Station.objects.filter(line=station.line, sequence__lt=station.sequence, routings__family_id=family_id)
-            .order_by("-sequence").first())
+def _upstream_station(station, family_id, cache=None):
+    """The previous station on the part family's Routing (highest sequence below this one), or None.
+    cache: a dict shared across calls; the line's routing is then read once."""
+    if cache is None:
+        return (Station.objects.filter(line=station.line, sequence__lt=station.sequence, routings__family_id=family_id)
+                .order_by("-sequence").first())
+    line_id = station.line_id
+    if line_id not in cache:
+        by_family = defaultdict(list)
+        for r in Routing.objects.filter(station__line_id=line_id).select_related("station"):
+            by_family[r.family_id].append(r.station)
+        cache[line_id] = by_family
+    below = [s for s in cache[line_id].get(family_id, []) if s.sequence < station.sequence]
+    return max(below, key=lambda s: s.sequence) if below else None
 
 
-def operator_groups(station, part=None, window=None):
+def operator_groups(station, part=None, window=None, *, plan=None, settings=None):
     """My Shift / operator drill-down for one station: one OperatorGroup per part that ran in the
     window (or only `part`). Gated by the display matrix: a station that is not count-trusted
-    returns groups with no rows and the message "Counts unverified, keep tally."."""
+    returns groups with no rows and the message "Counts unverified, keep tally.".
+
+    plan / settings: a HubPlan for the station's hub and SiteSettings, when the caller renders many
+    stations (My Shift) and wants to share them; a Station with line__hub already loaded is used as is."""
     if window is None:
         raise ValueError("operator_groups needs a window")
-    station = Station.objects.select_related("line__hub").get(pk=station.pk)
-    settings = SiteSettings.load()
-    plan = HubPlan(station.line.hub)
+    if "line" not in station._state.fields_cache or "hub" not in station.line._state.fields_cache:
+        station = Station.objects.select_related("line__hub").get(pk=station.pk)
+    settings = settings or SiteSettings.load()
+    plan = plan if plan is not None and plan.hub.pk == station.line.hub_id else HubPlan(station.line.hub)
     ids = plan.shift_ids(window)
     ids = None if ids is None else set(ids)
     now = window.now()
@@ -782,6 +797,16 @@ def operator_groups(station, part=None, window=None):
                     segs, done, settings.upstream_gap_minutes * 60)
         return upstream_cache[(upstream.pk, key)]
 
+    txn_rows = {}
+
+    def person_rows(alias):
+        """Job intervals for the transaction gap, fetched once per station for every person in it."""
+        if not txn_rows:
+            txn_rows.update(_txn_job_rows([aliases[aid] for p in acc.values() for aid in p],
+                                          [k for p in acc.values() for a in p.values() for k in a["windows"]],
+                                          plan, now))
+        return txn_rows.get(_person_key(alias), [])
+
     groups = []
     for pid in sorted(part_ids, key=lambda p: parts[p].hub_part_code):
         p = parts[pid]
@@ -802,7 +827,8 @@ def operator_groups(station, part=None, window=None):
                 station.pk, pid, window.date_to - timedelta(days=RATE_MEDIAN_DAYS - 1), window.date_to, window.as_of)
         group.jobs = sum(a["jobs"] for a in acc[pid].values())
         group.quantity = sum(a["qty"] for a in acc[pid].values())
-        upstream = _upstream_station(station, p.family_id) if c.show_upstream_gap else None
+        upstream = (_upstream_station(station, p.family_id, plan.__dict__.setdefault("upstream_cache", {}))
+                    if c.show_upstream_gap else None)
         for aid, a in sorted(acc[pid].items()):
             alias = aliases[aid]
             op = alias.operator
@@ -814,7 +840,7 @@ def operator_groups(station, part=None, window=None):
                     rate_vs = rate / group.median_rate_per_hour - 1
             gap = None
             if c.show_transaction_gap and a["windows"]:
-                gap = _transaction_gap_seconds(alias, a["windows"], plan, now) / 60
+                gap = _transaction_gap_seconds(alias, a["windows"], plan, now, rows=person_rows(alias)) / 60
             ugap = None
             if upstream is not None and a["windows"]:
                 ugap = sum(upstream_gap(upstream, k) for k in a["windows"]) / 60
@@ -832,7 +858,29 @@ def operator_groups(station, part=None, window=None):
     return groups
 
 
-def _transaction_gap_seconds(alias, windows, plan, now):
+def _person_key(alias):
+    return f"o{alias.operator_id}" if alias.operator_id else f"a{alias.pk}"
+
+
+def _txn_job_rows(aliases, windows, plan, now):
+    """{person key: [(started_at, completed_at or None)]} for every person's jobs at any station overlapping
+    the union of `windows`, in one query (the batched input of _transaction_gap_seconds)."""
+    spans = [w for w in (plan.stamper.window(shid, d) for shid, d in set(windows)) if w is not None]
+    if not spans or not aliases:
+        return {"": []}
+    lo, hi = min(w.start for w in spans), max(w.end for w in spans)
+    op_ids = {a.operator_id for a in aliases if a.operator_id}
+    alias_ids = {a.pk for a in aliases if not a.operator_id}
+    q = Q(alias__operator_id__in=op_ids) | Q(alias_id__in=alias_ids)
+    out = {"": []}
+    for aid, oid, s, e in (Job.objects.filter(q, started_at__lt=hi).exclude(completed_at__lte=lo)
+                           .values_list("alias_id", "alias__operator_id", "started_at", "completed_at")):
+        if s < now:
+            out.setdefault(f"o{oid}" if oid else f"a{aid}", []).append((s, e if e is not None and e <= now else None))
+    return out
+
+
+def _transaction_gap_seconds(alias, windows, plan, now, rows=None):
     """Shift time minus breaks minus time covered by the person's jobs at any station, per shift
     window the person worked. Job intervals are intersected with each window's working segments
     (selected by time, not by stamped shift). A job still open at `now` covers time up to `now`,
@@ -841,11 +889,12 @@ def _transaction_gap_seconds(alias, windows, plan, now):
     spans = [w for w in (plan.stamper.window(shid, d) for shid, d in windows) if w is not None]
     if not spans:
         return 0.0
-    lo, hi = min(w.start for w in spans), max(w.end for w in spans)
-    jobs = Job.objects.filter(started_at__lt=hi).exclude(completed_at__lte=lo)
-    jobs = jobs.filter(alias__operator=alias.operator) if alias.operator_id else jobs.filter(alias=alias)
-    rows = [(s, e if e is not None and e <= now else None) for s, e in jobs.values_list("started_at", "completed_at")
-            if s < now]
+    if rows is None:
+        lo, hi = min(w.start for w in spans), max(w.end for w in spans)
+        jobs = Job.objects.filter(started_at__lt=hi).exclude(completed_at__lte=lo)
+        jobs = jobs.filter(alias__operator=alias.operator) if alias.operator_id else jobs.filter(alias=alias)
+        rows = [(s, e if e is not None and e <= now else None)
+                for s, e in jobs.values_list("started_at", "completed_at") if s < now]
     total = 0.0
     for w in spans:
         segs = _segments(w, now)
@@ -874,15 +923,24 @@ def worth_a_conversation(scope, window):
         raise ValueError("worth_a_conversation is never plant-wide: give lines (an area) or stations")
     out = []
     for st in scope.station_list():
-        for grp in operator_groups(st, scope.part, window):
-            if not grp.cell.show_comparisons:
-                continue
-            cands = [r for r in grp.rows if not r.unmapped and r.rate_vs_median is not None
-                     and r.rate_vs_median <= -WORTH_A_CONVERSATION_MIN_SHORTFALL]
-            cands.sort(key=lambda r: (r.rate_vs_median, r.alias.pk))
-            items = [ConversationItem(r, st, grp.part, _reasons(r, st)) for r in cands[:WORTH_A_CONVERSATION_LIMIT]]
-            if items:
-                out.append(ConversationGroup(st, grp.part, items))
+        out += conversation_from_groups(operator_groups(st, scope.part, window))
+    return out
+
+
+def conversation_from_groups(groups):
+    """The D5 selection over OperatorGroups a caller already has (My Shift computes them for its table):
+    up to 3 mapped operators per GREEN group at least 10% under the median. Returns [ConversationGroup]."""
+    out = []
+    for grp in groups:
+        if not grp.cell.show_comparisons:
+            continue
+        cands = [r for r in grp.rows if not r.unmapped and r.rate_vs_median is not None
+                 and r.rate_vs_median <= -WORTH_A_CONVERSATION_MIN_SHORTFALL]
+        cands.sort(key=lambda r: (r.rate_vs_median, r.alias.pk))
+        items = [ConversationItem(r, grp.station, grp.part, _reasons(r, grp.station))
+                 for r in cands[:WORTH_A_CONVERSATION_LIMIT]]
+        if items:
+            out.append(ConversationGroup(grp.station, grp.part, items))
     return out
 
 
@@ -954,7 +1012,7 @@ def missing_demand(lines=None, date_from=None, date_to=None, *, include_zero=Tru
 
 
 __all__ = [
-    "line_health", "station_rows", "operator_groups", "worth_a_conversation", "job_list", "shift_comparison",
+    "line_health", "station_rows", "operator_groups", "worth_a_conversation", "conversation_from_groups", "job_list", "shift_comparison",
     "missing_demand", "Window", "Scope", "Pace", "Yield", "LineYield", "TopScrap", "Bottleneck", "DemandGap",
     "TrendPoint", "LineHealthRow", "StationRow", "PartRow", "BatchStats", "OperatorRow", "OperatorGroup",
     "Reason", "ConversationItem", "ConversationGroup", "JobItem", "ShiftCell", "ShiftComparisonRow", "DASH",

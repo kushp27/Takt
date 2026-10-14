@@ -1,0 +1,3 @@
+{% comment %}Design review D16: trust as words and a grey outline badge, never fill colour. The word is the
+accessible name; the outline glyph (✓ # … – ?) is a second, colour-free cue. D11: "Not graded yet" shows its
+detail ("Not graded yet (needs 4 weeks; 9 days so far)").{% endcomment %}{% if badge %}<span class="badge badge-{{ badge.key }}" title="{{ badge.detail }}">{% if show_detail %}{{ badge.detail }}{% else %}{{ badge.word }}{% endif %} <span class="badge-glyph" aria-hidden="true">{{ badge.glyph }}</span></span>{% endif %}

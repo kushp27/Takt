@@ -6,16 +6,19 @@
   <title>{% block title %}Takt{% endblock %} · Takt</title>
   <link rel="icon" href="{% static 'img/tuktuk.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'css/screens.css' %}">
+  <link rel="stylesheet" href="{% static 'css/print.css' %}" media="print">
   {% block extra_head %}{% endblock %}
   <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
   <script src="{% static 'ops/freshness.js' %}" defer></script>
+  <script src="{% static 'js/takt.js' %}" defer></script>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
   <header class="site-header">
     <a class="brand" href="/"><img src="{% static 'img/tuktuk.svg' %}" alt="" width="28" height="22">Takt</a>
     {% if user.is_authenticated %}
     <nav aria-label="Main">
-      <ul>{% block nav %}{% endblock %}</ul>
+      <ul>{% block nav %}{% include "web/partials/nav.html" %}{% endblock %}</ul>
     </nav>
     <div class="freshness">{% block freshness %}{% include "ops/partials/freshness_header.html" %}{% endblock %}</div>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form>

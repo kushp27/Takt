@@ -1,0 +1,124 @@
+/* Screen layout for Line Health, Area, My Shift, the dispute queue and the print sheet's screen view.
+   Tokens come from tokens.css (D17). No bordered boxes (D3): rows are separated by rules only,
+   no cards, no shadows. Colour carries meaning only together with a word (D18). */
+
+/* ---- page frame */
+.page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2) var(--s4); margin-bottom: var(--s4); }
+.page-head h1 { margin: 0; }
+.window-label { color: var(--text-2); font-size: var(--size-body); margin: 0; }
+.section-title { font-size: var(--size-status); font-weight: 600; margin: var(--s5) 0 var(--s2); }
+.subtle { color: var(--text-2); font-size: var(--size-table); }
+.button-link { background: none; border: 0; padding: 0; min-height: var(--control-min-height); color: var(--accent);
+  text-decoration: underline; cursor: pointer; font: inherit; }
+.phone-note { display: none; }
+
+/* ---- nav badge (eng review D6): a count with words, overdue spelled out */
+.nav-count { display: inline-block; min-width: 1.5em; margin-left: var(--s1); padding: 0 var(--s1);
+  border: 1px solid currentColor; border-radius: var(--radius); font-size: 12px; text-align: center; }
+.overdue, .overdue-label { color: var(--behind); font-weight: 600; }
+
+/* ---- shared picker (D21) */
+.window-picker { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2) var(--s3); margin: 0 0 var(--s4); }
+.window-picker label { display: flex; flex-direction: column; font-size: var(--size-table); color: var(--text-2); }
+.window-picker a { font-size: var(--size-table); align-self: center; }
+
+/* ---- status words (D3): colour only with the word; neutral words stay ink */
+.status-word { font-size: var(--size-status); }
+.status-neutral { color: var(--ink); font-weight: 600; }
+.sentence { font-size: var(--size-status); margin: 0; }
+
+/* ---- Line Health / Area rows (D3, D4): a plain table, status first, evidence below at 14px */
+.line-health { width: 100%; }
+.line-health caption, .data caption { text-align: left; font-weight: 600; padding: 0 0 var(--s2); }
+.line-health thead th { font-size: var(--size-table); }
+.line-health tbody.line-row th[scope="rowgroup"] { width: 14rem; font-weight: 600; color: var(--ink); }
+.line-health td.status-lead { width: 9rem; white-space: nowrap; }
+.line-health tr.status-row td { border-bottom: 0; padding-bottom: var(--s1); }
+.line-health tr.evidence-row td { font-size: var(--size-table); color: var(--ink); }
+.line-health .evidence-label { display: none; }
+.line-health tr.drill-row > td { padding: 0 0 0 var(--s4); border-bottom: 0; }
+.drill { margin: var(--s2) 0 var(--s4); }
+.drill:empty { margin: 0; }
+.htmx-indicator { display: none; }
+.htmx-request.htmx-indicator, .htmx-request .htmx-indicator { display: table-row; }
+p.htmx-request.htmx-indicator, .htmx-request p.htmx-indicator { display: block; }
+.loading-row td, p.loading-row { color: var(--text-2); font-size: var(--size-table); }
+
+/* ---- sparkline (D22) */
+.sparkline { display: block; overflow: visible; }
+.sparkline .spark-pace { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+.sparkline .spark-yield { fill: none; stroke: var(--text-2); stroke-width: 1.5; }
+.sparkline .spark-band { fill: var(--line); opacity: 0.45; }
+.sparkline .spark-today-pace { fill: var(--ink); }
+.sparkline .spark-today-yield { fill: var(--text-2); }
+
+/* ---- data tables: stations, operators, shift comparison, queue */
+.data { width: 100%; margin: 0 0 var(--s4); }
+.data th[scope="row"] { color: var(--ink); font-weight: 400; }
+.data tbody th[scope="rowgroup"] { color: var(--ink); font-weight: 600; padding-top: var(--s3); }
+.data .group-meta { color: var(--text-2); font-weight: 400; }
+.data td.num, .data th.num { text-align: right; }
+.message { margin: var(--s2) 0 var(--s4); font-weight: 600; }
+.station-block { margin: 0 0 var(--s5); }
+.station-block > h3 { font-size: var(--size-body); margin: var(--s4) 0 var(--s2); }
+
+/* ---- worth a conversation (D5) */
+.conversation { margin: 0 0 var(--s5); }
+.conversation ul { margin: 0 0 var(--s3); padding-left: var(--s5); }
+.conversation li { margin: 0 0 var(--s1); }
+
+/* ---- disputes: My disputes strip (D14), Area strip (D7), queue (D8) */
+.strip { padding: var(--s2) 0; margin: 0 0 var(--s4); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.strip h2 { font-size: var(--size-body); margin: 0 0 var(--s2); }
+.strip p { margin: 0; }
+.dispute-form fieldset { border: 0; padding: 0; margin: var(--s3) 0; }
+.dispute-form legend { font-weight: 600; padding: 0; margin-bottom: var(--s2); }
+.dispute-form .choice { display: flex; align-items: center; gap: var(--s2); min-height: var(--control-min-height); }
+.dispute-form textarea { min-height: 4em; width: min(36rem, 100%); padding: var(--s2); }
+.dispute-form .actions { display: flex; gap: var(--s3); margin-top: var(--s3); }
+.form-error { color: var(--behind); font-weight: 600; }
+.job-excluded td.job-cell { text-decoration: line-through; }
+.status-open { font-weight: 600; }
+.status-confirmed, .status-rejected { font-weight: 600; }
+.panel-heading { font-size: var(--size-body); margin: var(--s2) 0; }
+
+/* ---- states (table 6a) */
+.state { margin: var(--s4) 0; }
+.state p { margin: 0 0 var(--s2); }
+.gate1-notice { margin: var(--s2) 0 var(--s3); color: var(--ink); font-weight: 600; }
+
+/* ---- print sheet, on screen */
+.print-actions { margin: 0 0 var(--s4); }
+.print-foot { margin-top: var(--s5); color: var(--text-2); font-size: var(--size-table); }
+.correction { min-width: 8rem; }
+
+/* ---- Phone (design review D19): below 640px every table row becomes a stacked block: the status word and
+   sentence on top, then "Label: value" pairs (Pace, Yield, Bottleneck). No sparkline, no dispute or
+   drill-down controls; a note says "Open on a desktop to dispute or drill down." 16px gutters, nothing
+   wider than the screen, so there is no horizontal scroll. Phones are read-only (D15). */
+.line-name-text { display: none; }
+@media (max-width: 639.98px) {
+  body { overflow-wrap: anywhere; }
+  main { padding: var(--s4); max-width: 100%; box-sizing: border-box; }
+  .site-header { padding: var(--s3) var(--s4); }
+  .stale-banner { padding: var(--s2) var(--s4); }
+  img, svg, table, input, select, textarea { max-width: 100%; }
+
+  table, caption, thead, tbody, tfoot, tr, th, td { display: block; width: auto; text-align: left; }
+  table { margin: 0 0 var(--s4); }
+  thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  th, td { border-bottom: 0; padding: var(--s1) 0; }
+  tbody, .data tbody tr { border-bottom: 1px solid var(--line); padding: var(--s2) 0; }
+  td.num, th.num { text-align: left; }
+  td[data-label]::before { content: attr(data-label) ": "; color: var(--text-2); }
+  .line-health td[data-label]::before { content: none; }
+  .line-health .evidence-label { display: inline; color: var(--text-2); }
+  .line-health tbody.line-row th[scope="rowgroup"] { width: auto; font-size: var(--size-body); }
+  .line-name-text { display: inline; }
+
+  .sparkline, .col-trend, .drill-row, .loading-row, .job-list-row, .detail-row, .col-dispute,
+  .drill-toggle, .dispute-toggle, .excluded-link { display: none !important; }
+  .phone-note { display: block; color: var(--text-2); margin: 0 0 var(--s4); }
+  .window-picker { flex-direction: column; align-items: stretch; }
+  .page-head { flex-direction: column; align-items: flex-start; }
+}

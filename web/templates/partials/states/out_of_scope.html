@@ -1,0 +1,3 @@
+{% comment %}Table 6a, D13: outside the user's role scope. "This area isn't in your assignment" with a link back
+to their own area. accounts.decorators.render_out_of_scope serves it (page, or this inline fragment for htmx)
+with HTTP 403. Context: own_area_url, is_admin_role.{% endcomment %}{% include "partials/out_of_scope_inline.html" %}

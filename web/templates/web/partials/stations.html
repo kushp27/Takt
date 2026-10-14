@@ -1,0 +1,37 @@
+{% load takt_ui takt_freshness %}{% comment %}
+Station drill-down (design Component 6 screen map: "stations (same layout)"). One <tbody> per station in
+sequence: trust badge (D16), station pace with its raw good / required counts (D4), yield, top scrap, the
+bottleneck marker; batch stations add batches per shift, units per batch and cycle time (Component 5).
+Per-part rows carry the part's own grade and station yield, and drill to operators at that station and part
+only. A station that is not count-trusted shows "Counts unverified" instead of counts and operators.
+{% endcomment %}{# DEVIATION: table 6a gives the loading/failed copy for stations only; the operator drill-down uses the same words with "operators", the job list with "jobs". #}<h3 class="panel-heading" tabindex="-1">Stations on {{ line.name }} · {{ window.label }}</h3>
+<table class="data stations {% stale_class line.hub %}">
+  <caption class="visually-hidden">Stations on {{ line.name }} in line order: trust, pace, counts and yield</caption>
+  <thead>
+    <tr><th scope="col">Station</th><th scope="col">Trust</th><th scope="col">Pace · units</th><th scope="col">Good / required</th><th scope="col">Yield</th><th scope="col">Top scrap</th></tr>
+  </thead>
+  {% for s in rows %}{% with sid=s.station.pk %}
+  <tbody id="station-{{ sid }}">
+    <tr class="station-row">
+      <th scope="rowgroup">{{ s.station.name }}{% if s.is_bottleneck %} · <strong>Bottleneck</strong>{% endif %} {% stale_tag line.hub %}</th>
+      <td>{% trust_badge s.cell.badge %}</td>
+      <td>{{ s.pace.throughput_display }}</td>
+      <td>{% if s.pace.value is not None %}{{ s.pace.tooltip }}{% else %}—{% endif %}</td>
+      <td>{{ s.yield_.display }}</td>
+      <td>{% if s.top_scrap %}{{ s.top_scrap.label }} ({{ s.top_scrap.quantity }}){% else %}—{% endif %}</td>
+    </tr>
+    {% if s.batch %}<tr class="batch-row"><td colspan="6" class="subtle">Batch station: {% if s.batch.batches_per_shift is not None %}{{ s.batch.batches_per_shift|floatformat:1 }} batches per shift{% else %}no batches{% endif %}{% if s.batch.units_per_batch is not None %} · {{ s.batch.units_per_batch|floatformat:0 }} units per batch{% endif %}{% if s.batch.cycle_minutes is not None %} · batch cycle {{ s.batch.cycle_minutes|duration }}{% endif %}</td></tr>{% endif %}
+    {% for p in s.parts %}{% with key=sid|dash:p.part.pk %}
+    <tr class="part-row">
+      <th scope="row">Part {{ p.part.hub_part_code }}</th>
+      <td>{% trust_badge p.cell.badge %}</td>
+      <td colspan="2">{% if p.cell.show_counts %}{{ p.jobs }} job{{ p.jobs|pluralize }} · {{ p.quantity }} units{% else %}{{ p.cell.message }}{% endif %}</td>
+      <td>{{ p.yield_.display }}</td>
+      <td>{% if p.cell.show_operator_rows %}<button type="button" class="button-link drill-toggle" data-takt-drill="operators" hx-get="{% url 'station_operators' sid %}?{{ window.query }}&amp;part_id={{ p.part.pk }}" hx-target="#ops-{{ sid }}-{{ p.part.pk }}" hx-indicator="#loading-ops-{{ sid }}-{{ p.part.pk }}" aria-expanded="false" aria-controls="ops-{{ sid }}-{{ p.part.pk }}" data-load-error="Couldn't load operators." data-takt-loaded="Operators loaded">Operators<span class="visually-hidden"> at {{ s.station.name }}, part {{ p.part.hub_part_code }}</span></button>{% endif %}</td>
+    </tr>
+    {% with ind="loading-ops-"|add:key %}{% include "partials/states/loading.html" with noun="operators" colspan=6 indicator_id=ind %}{% endwith %}
+    <tr class="drill-row"><td colspan="6"><div class="drill" id="ops-{{ sid }}-{{ p.part.pk }}"></div></td></tr>
+    {% endwith %}{% endfor %}
+  </tbody>
+  {% endwith %}{% endfor %}
+</table>
