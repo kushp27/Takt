@@ -53,6 +53,8 @@ HOW LANE D ADDS A URL TO THE SWEEP
 4. Run the suite. Nothing else to edit: the matrix of roles and Gate 1 states is automatic.
 """
 
+import os
+from datetime import datetime
 import re
 from dataclasses import dataclass
 
@@ -79,6 +81,21 @@ FORGED_TOKEN = "eyJuIjoiZm9yZ2VkIn0:forged:signature"
 BLOCK_RE = re.compile(r"<(table|ul|ol)\b.*?</\1>", re.DOTALL | re.IGNORECASE)
 
 CASES_BY_ID = {c.id: c for c in SWEEP_CASES}
+
+
+# The sweep's world puts jobs at fixed local times today; a real clock near those times (or near
+# midnight) made a case flake. Pin "now" for the whole sweep (override with SWEEP_NOW for probing).
+SWEEP_NOW = os.environ.get("SWEEP_NOW", "2026-10-09T12:00:00-05:00")
+
+
+@pytest.fixture(autouse=True)
+def _pinned_clock(monkeypatch):
+    from django.utils import timezone as djtz
+
+    instant = datetime.fromisoformat(SWEEP_NOW)
+    monkeypatch.setattr(djtz, "now", lambda: instant)
+    monkeypatch.setattr("ops.freshness.current_time", lambda: instant)
+    return instant
 
 
 @pytest.fixture

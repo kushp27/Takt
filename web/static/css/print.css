@@ -5,7 +5,6 @@
 @page {
   size: letter portrait;
   margin: 0.6in 0.5in 0.7in;
-  @bottom-left { content: "For lead use. Not for posting."; font: 9pt "IBM Plex Sans", sans-serif; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "IBM Plex Sans", sans-serif; }
 }
 
@@ -42,7 +41,6 @@ tfoot th, tfoot td { border-top: 1.5pt solid #000 !important; font-weight: 600; 
 .print-group { break-inside: avoid; page-break-inside: avoid; }
 .correction { width: 30%; border-left: 0.75pt solid #000 !important; }
 .print-total { margin: 2pt 0 0; }
-/* The footer: one mechanism, @page margin boxes ("For lead use. Not for posting." and page X of Y on every
-   page, Chrome / Edge). Browsers without margin boxes (Firefox) print no footer; the on-screen copy below
-   the sheet is hidden in print so the last page never shows it twice. */
-.print-foot { display: none !important; }
+/* D20 footer: "For lead use. Not for posting." prints in flow after the sheet in every browser; the
+   @page margin box carries only "Page X of Y" (Chrome / Edge), so the line never prints twice. */
+.print-foot { display: block !important; margin-top: 8pt; font-size: 9pt; }

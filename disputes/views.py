@@ -20,6 +20,7 @@ from accounts.decorators import area_scope_required, operator_bearing, render_ou
 from accounts.models import Profile
 from accounts.policy import OperatorScope, page_context
 from core.models import Area
+from core.shifts import local_date
 from web import windows
 from web.screens.common import announce, is_decider
 
@@ -28,6 +29,12 @@ from .models import Dispute
 
 DECIDERS = (Profile.OPS_MANAGER, Profile.SUPERVISOR)
 QUEUE_VIEW = "dispute_queue"
+
+
+def _local_today(area, now):
+    """The plant-local date for this area (its first line's hub), not the server's date."""
+    line = area.lines.select_related("hub").first()
+    return local_date(line.hub, now) if line else now.date()
 
 
 def _scope(area, disputes, fallback):
@@ -48,7 +55,7 @@ def dispute_queue(request, area_id):
     area = get_object_or_404(Area, pk=area_id)
     now = windows.now()
     open_rows = list(service.open_disputes([area]))
-    ctx = page_context(request, _scope(area, open_rows, now.date()))
+    ctx = page_context(request, _scope(area, open_rows, _local_today(area, now)))
     return render(request, "disputes/queue.html", {
         "takt_page": ctx, "area": area, "subs": service.queue(open_rows, now), "nav_active": "disputes",
     })
@@ -64,7 +71,7 @@ def dispute_detail(request, area_id, dispute_id):
         return render_out_of_scope(request)
     # The token check comes first so a partial without the queue's token never renders fresh letters
     # (HX-Refresh); then the role check (leads raise disputes, they don't decide them).
-    ctx = page_context(request, _scope(area, [dispute], windows.now().date()), parents=(QUEUE_VIEW,))
+    ctx = page_context(request, _scope(area, [dispute], _local_today(area, windows.now())), parents=(QUEUE_VIEW,))
     if not is_decider(request.user):
         return render_out_of_scope(request, reason="role")
     if _own(request.user, dispute):
@@ -105,7 +112,7 @@ def dispute_decide(request, area_id, dispute_id):
         return render_out_of_scope(request)
     now = windows.now()
     # page_context before any write (a rejected token in letter mode answers HX-Refresh, nothing saved).
-    ctx = page_context(request, _scope(area, [dispute], now.date()), parents=(QUEUE_VIEW,))
+    ctx = page_context(request, _scope(area, [dispute], _local_today(area, now)), parents=(QUEUE_VIEW,))
     if not is_decider(request.user):
         return render_out_of_scope(request, reason="role")
     if _own(request.user, dispute):

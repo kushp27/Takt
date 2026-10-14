@@ -110,11 +110,11 @@ def test_print_css_letter_black_and_white_hides_nav():
     css = (Path(settings.BASE_DIR) / "web/static/css/print.css").read_text()
     assert "size: letter portrait" in css
     assert 'counter(page) " of " counter(pages)' in css
-    assert '"For lead use. Not for posting."' in css
+    assert "@bottom-left" not in css  # the footer line is in flow only, so it never prints twice
     assert re.search(r"\.site-header, \.stale-banner, nav,", css) and "display: none !important" in css
     assert "* { color: #000 !important; background: transparent !important;" in css
     assert ".print-station { break-inside: avoid;" in css  # page breaks only between stations
-    assert ".print-foot { display: none !important; }" in css  # one footer mechanism: no duplicate on the last page
+    assert ".print-foot { display: block !important;" in css  # D20 footer prints in every browser, Firefox too
     base = (Path(settings.BASE_DIR) / "web/templates/web/base.html").read_text()
     assert "<link rel=\"stylesheet\" href=\"{% static 'css/print.css' %}\" media=\"print\">" in base
 
